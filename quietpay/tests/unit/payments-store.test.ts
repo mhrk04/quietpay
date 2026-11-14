@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_RECORDS_PER_ACCOUNT,
   MAX_RECORDS_PER_INVOICE,
+  accountDepositPath,
+  accountKeyFor,
+  sanitizeAccountRecord,
   createMemoryStore,
   depositPath,
   getPaymentsStore,
@@ -62,9 +66,30 @@ describe("payments-store", () => {
     expect(JSON.stringify(clean)).not.toContain("secret");
   });
 
+  it("account index: path uses sha256 of the account, lists newest first, ignores duplicates, caps at 200", async () => {
+    const AK = accountKeyFor("shop.near");
+    expect(AK).toBe(accountKeyFor("shop.near"));
+    expect(AK).toMatch(/^[0-9a-f]{64}$/);
+    expect(AK).not.toContain("shop");
+    expect(accountDepositPath(AK, "abc")).toBe(`accounts/${AK}/abc.json`);
+    const extra = { invoiceCode: "c", description: "d", amount: "1" };
+    const s = createMemoryStore();
+    await s.recordForAccount(AK, { ...rec("a", "2030-01-01T00:00:00.000Z"), ...extra });
+    await s.recordForAccount(AK, { ...rec("b", "2030-01-02T00:00:00.000Z"), ...extra });
+    await s.recordForAccount(AK, { ...rec("a", "2031-01-01T00:00:00.000Z"), ...extra });
+    expect((await s.listForAccount(AK)).map((d) => d.depositAddress)).toEqual(["b", "a"]);
+    const c = createMemoryStore();
+    for (let i = 0; i < MAX_RECORDS_PER_ACCOUNT + 5; i++) await c.recordForAccount(AK, { ...rec(`addr${i}`), ...extra });
+    expect(await c.listForAccount(AK)).toHaveLength(MAX_RECORDS_PER_ACCOUNT);
+    await expect(c.recordForAccount(AK, { ...rec("../x"), ...extra })).rejects.toThrow();
+    expect(sanitizeAccountRecord(rec("a"))).toBeNull();
+    expect(Object.keys(sanitizeAccountRecord({ ...rec("a"), ...extra, refundTo: "x" })!)).not.toContain("refundTo");
+  });
   it("is a no-op without Blob env", async () => {
     const s = getPaymentsStore({});
     await s.record(KEY, rec("a"));
     expect(await s.list(KEY)).toEqual([]);
+    await s.recordForAccount(accountKeyFor("a.near"), { ...rec("a"), invoiceCode: "c", description: "", amount: "1" });
+    expect(await s.listForAccount(accountKeyFor("a.near"))).toEqual([]);
   });
 });

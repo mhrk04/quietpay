@@ -1,6 +1,13 @@
 import { toBaseUnits } from "@/lib/amount";
 import { decodeInvoice } from "@/lib/link-codec";
-import { getPaymentsStore, invoiceKeyFor, isSafeAddress, type DepositRecord } from "@/lib/server/payments-store";
+import {
+  accountKeyFor,
+  getPaymentsStore,
+  invoiceKeyFor,
+  isSafeAddress,
+  type AccountRecord,
+  type DepositRecord,
+} from "@/lib/server/payments-store";
 import { proxyFetch } from "@/lib/server/proxy";
 import type { TokenInfo } from "@/lib/tokens";
 
@@ -26,7 +33,7 @@ async function buildRecord(
   clientBody: unknown,
   upstream: { status: number; body: unknown },
   jwt?: string,
-): Promise<{ key: string; record: DepositRecord } | null> {
+): Promise<{ key: string; record: DepositRecord; accountKey: string; accountRecord: AccountRecord } | null> {
   if (upstream.status < 200 || upstream.status >= 300) return null;
   const req = obj(clientBody);
   if (!req || req.dry !== false || req.swapType !== "EXACT_OUTPUT") return null;
@@ -46,9 +53,7 @@ async function buildRecord(
   if (!deadline || !Number.isFinite(Date.parse(deadline))) return null;
   const token = await findOrigin(assetId, jwt);
   if (!token) return null;
-  return {
-    key: invoiceKeyFor(invoiceCode),
-    record: {
+  const record: DepositRecord = {
       depositAddress: address,
       depositMemo: text(quote.depositMemo) ?? null,
       amountIn,
@@ -56,7 +61,13 @@ async function buildRecord(
       origin: { symbol: token.symbol, blockchain: token.blockchain, decimals: token.decimals, assetId: token.assetId },
       deadline,
       createdAt: new Date().toISOString(),
-    },
+  };
+  // The account is the invoice recipient the server already matched against req.recipient above.
+  return {
+    key: invoiceKeyFor(invoiceCode),
+    record,
+    accountKey: accountKeyFor(inv.account),
+    accountRecord: { ...record, invoiceCode, description: inv.description, amount: inv.amount },
   };
 }
 
@@ -72,7 +83,10 @@ export async function recordLiveDeposit(
   try {
     const work = (async () => {
       const built = await buildRecord(invoiceCode, clientBody, upstream, jwt);
-      if (built) await getPaymentsStore().record(built.key, built.record);
+      if (!built) return;
+      const store = getPaymentsStore();
+      await store.record(built.key, built.record);
+      await store.recordForAccount(built.accountKey, built.accountRecord);
     })();
     work.catch(() => {});
     await Promise.race([work, new Promise<void>((resolve) => (timer = setTimeout(resolve, RECORD_TIMEOUT_MS)))]);

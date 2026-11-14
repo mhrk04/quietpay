@@ -91,6 +91,9 @@ Set these in `.env.local` (server side only). Never commit real values.
 | `ONECLICK_JWT` | Partner JWT from https://partners.near-intents.org. Sent by the server to 1Click as `X-API-Key`. Enables confidential quotes (`confidentiality: "basic"`). Example: `ONECLICK_JWT=<your-partner-jwt>`. Never sent to the browser. |
 | `QUIETPAY_ALLOW_PUBLIC_FALLBACK` | Set to exactly `true` to allow public (not private) quotes when `ONECLICK_JWT` is empty. The UI then labels payments "Standard payment (not private)". Any other value, with no JWT, makes the server return HTTP 500 "Server is not configured". |
 | `BLOB_READ_WRITE_TOKEN` | Token of the private Vercel Blob store that holds payment records. Added by Vercel when the store is connected. Optional: without it, nothing is recorded. |
+| `QUIETPAY_SESSION_SECRET` | Random string of at least 32 characters, used to sign the sign-in challenge and the session cookie (HMAC-SHA256). Example: `QUIETPAY_SESSION_SECRET=<output of openssl rand -base64 48>`. Server only. Optional: when it is empty, merchant sign-in answers "Sign-in is not set up" and the rest of the app works. |
+| `QUIETPAY_AUTH_RECIPIENT` | Name the wallet shows as the recipient of the sign-in message. Optional: the site's host name is used when empty. |
+| `NEAR_RPC_URL` | NEAR mainnet RPC used to check the signing key. Optional: defaults to `https://free.rpc.fastnear.com` (free public endpoint from the NEAR docs). |
 | `QUIETPAY_LIVE_TESTS` | Set to exactly `true` to run read-only live tests against the real 1Click API. Unset means no test calls the real API. Live tests are not written yet (`tests/live/` is empty), so this variable currently has no effect. |
 
 Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `public`. Otherwise `unconfigured`.
@@ -134,30 +137,51 @@ Read-only calls to `https://1click.chaindefuser.com`, first without a JWT:
 - Whether destination transaction hashes appear for confidential swaps.
 - Whether the recipient account needs, or gets, USDC registration.
 
+## Merchant sign-in
+The Create page links to **My payments** (`/payments`). The merchant signs in with a NEAR wallet and sees every payment made to their account, on any device.
+How it works:
+1. The page asks the server for a challenge: the message "Sign in to QuietPay", a recipient (the site name) and a random 32-byte code. The server puts these in a signed cookie that lasts 5 minutes.
+2. The wallet (through `@hot-labs/near-connect`, mainnet) shows the message and signs it as a NEP-413 message. **This is only a signature. No transaction is sent, no gas or fee is paid, no funds can move, and no access key is added.**
+3. The server checks the signature against the message, recipient and code stored in its own cookie (never values sent by the browser), then asks the NEAR mainnet RPC whether that public key is a **full-access key** of the account.
+4. If everything matches, the server sets a session cookie and removes the challenge cookie.
+What is checked:
+- The challenge cookie is present, has a valid HMAC-SHA256 signature (compared in constant time) and is under 5 minutes old.
+- The NEAR account ID is valid and the ed25519 signature is valid over the NEP-413 payload (tag 2^31 + 413, SHA-256).
+- The key is a full-access key of that account on mainnet. Function-call keys and unknown keys are rejected. If the RPC cannot be reached the server answers 502 and nothing is signed in.
+- The challenge cookie is cleared after every answer except a temporary RPC failure. The server keeps no list of used codes, so "single use" means the browser's challenge is removed, and a copy of the cookie plus its signature would still work until the 5 minutes end.
+Session: an httpOnly, SameSite=Lax cookie `qp_session` (Secure in production) that is valid for 8 hours and holds only the account ID, signed with `QUIETPAY_SESSION_SECRET`. "Sign out" clears it. The cookie is not stored on the server, so signing out does not invalidate a copy that was saved elsewhere.
+What the merchant sees: account, and for each payment the description, the amount requested, the token and chain the payer used (readable names such as "Ethereum"), the live status, and a "View payment status" link. Newest first, at most 200 per account.
+Limits:
+- Payments recorded before this feature was added are **not** indexed by account. They stay available through their payment link ("Check payments" on the Create page).
+- Sign-in proves control of a full-access key of the account. It does not prove the person owns the business.
+- A wallet that is not on the list of allowed sites in the `/payments` security policy is blocked on that page (see below).
+- Real wallet signatures cannot be produced by the automated tests. They cover the server checks with generated keys and a mocked RPC, and the page with mocked responses.
+Security policy for `/payments`: every other page keeps the strict policy. `/payments` additionally allows only what the wallet connector needs (`connect-src`, `img-src`, `style-src`, `font-src`, one `frame-src`): GitHub and jsDelivr for the wallet list, and the hosts used by HOT, Meteor, MyNearWallet, Intear, NEAR Mobile and Nightly. The list is in `next.config.ts`. Wallet code runs in a sandboxed frame that inherits this policy, so a new wallet needs its hosts added there.
 ## What the server stores (payment records)
 
-- For each live quote the server itself received and that matches the invoice, QuietPay stores one small JSON record in a **private Vercel Blob store**, under `invoices/<sha256 of the invoice code>/<deposit address>.json`. The record holds the deposit address, deposit memo (if any), amounts, token and chain, quote deadline and creation time.
-- It stores **no refund address, no keys, no JWT, no IP address and no personal data**. At most 20 records are kept per invoice.
+- For each live quote the server itself received and that matches the invoice, QuietPay stores one small JSON record in a **private Vercel Blob store**, under `invoices/<sha256 of the invoice code>/<deposit address>.json`, and a copy under `accounts/<sha256 of the merchant account>/<deposit address>.json` that also holds the invoice code, description and requested amount (this powers "My payments"; the account comes from the invoice that the server matched, never from the browser). The record holds the deposit address, deposit memo (if any), amounts, token and chain, quote deadline and creation time.
+- It stores **no refund address, no keys, no JWT, no IP address and no personal data**. At most 20 records are kept per invoice and 200 per account.
 - A record is written only for a live (`dry: false`) quote that succeeded, whose recipient and amount match the invoice code the payer's browser sent with the request. The deposit address always comes from the 1Click response, never from the browser. Dry quotes are never recorded.
 - **Anyone who has the payment link can read these records** through `/api/invoice`. Deposit addresses are public on-chain anyway, but this means QuietPay's server can link a deposit to an invoice and its merchant, even though the chain cannot. This is a limit of the confidentiality QuietPay offers (see the scope section above).
 - If the Blob store is not configured (`BLOB_READ_WRITE_TOKEN` missing), recording is skipped and the app works as before. A storage failure never blocks a quote or a payment. Only the server reads or writes the store (the browser never calls Blob), so the CSP is unchanged.
 
 ### Who can see and change payment records
 
-QuietPay has no user accounts and no login. **The payment link is the key.**
+QuietPay has no user accounts. Per invoice, **the payment link is the key.** Across all of a merchant's invoices, a NEAR wallet sign-in (see "Merchant sign-in") is the key.
 
 | Who | Can do | How it is enforced |
 |---|---|---|
 | QuietPay's server | Read and write the Blob store | The store is private. The server authenticates to Vercel Blob with a short-lived Vercel OIDC token (or `BLOB_READ_WRITE_TOKEN`), held only in the server environment. The browser never talks to Blob, and a blob's URL opened without credentials returns HTTP 403 (checked on the live store). |
 | A payer confirming a payment | Cause one record to be written | Only through `/api/quote`, only after 1Click returns a successful live quote whose recipient and amount match the invoice. The deposit address is taken from 1Click's response. A browser cannot submit or change a deposit address, so nobody can plant a fake address on someone else's invoice. |
 | Anyone holding the payment link (payer, merchant, anyone it is forwarded to) | See that invoice's payments and their status | `/api/invoice?i=<code>` checks that the invoice code is valid, then looks in the folder named by the code's sha256 hash. Without the exact link the folder cannot be found or guessed. |
+| The merchant, signed in with a NEAR wallet | See every payment made to their NEAR account since this feature was added | `/api/my-payments` needs the signed `qp_session` cookie. The account comes from that cookie only (never from the URL). Records sit under `accounts/<sha256 of the account>/`. |
 | Everyone else | Nothing | There is no route that lists invoices. The API rejects calls from other websites and is rate-limited. |
 
 Limits:
 
 - The app does not prove that the person pressing "Check payments" is the merchant. Anyone with the link sees the same list. The link already shows the amount and merchant account, and deposit addresses are public on-chain, so little extra is revealed, but **treat a payment link like a receipt: share it only with the payer.**
 - Records cannot be edited or deleted through the app. Only the project owner can remove them (Vercel dashboard or `vercel blob delete`).
-- Proving merchant identity would need a NEAR wallet sign-in (a signed NEP-413 message). Not built.
+- Merchant identity is proven by the NEAR wallet sign-in described in "Merchant sign-in" below. It does not change what the payment link shows.
 
 ### If the merchant clears browser data
 
@@ -168,7 +192,7 @@ Limits:
 | The "Saved invoices" list on the Create page | That browser's `localStorage` | **Gone from that browser.** |
 | The payer's in-progress deposit on their own phone | The payer's browser `localStorage` | Gone from that browser only; reopening the link restores it from the server. |
 
-The records are found by the payment link itself, so after clearing browser data the merchant needs the link again, for example from the WhatsApp chat where it was sent. Opening the link on the Pay page shows the latest payment state: an in-progress payment to continue, or "This invoice is already paid" with the receipt link. The full "Check payments" list per invoice is on the Create page, which needs the invoice in that browser's "Saved invoices"; after clearing, it is not there until the merchant creates or re-adds it. Nothing on the server or on-chain is lost. If the merchant no longer has the link anywhere, the server records cannot be looked up from the app, but the money and its transaction history stay visible in the merchant's NEAR account.
+**Easiest recovery: sign in again.** On the "My payments" page (`/payments`) the merchant signs in with the NEAR wallet and sees the full list of payments made to that account, with live status, with no link needed (payments recorded before the sign-in feature was added are not in this list; see "Merchant sign-in" limits). Without signing in, the records are found by the payment link itself, so the merchant needs the link again, for example from the WhatsApp chat where it was sent. Opening the link on the Pay page shows the latest payment state: an in-progress payment to continue, or "This invoice is already paid" with the receipt link. The full "Check payments" list per invoice is on the Create page, which needs the invoice in that browser's "Saved invoices"; after clearing, it is not there until the merchant creates or re-adds it. Nothing on the server or on-chain is lost. If the merchant no longer has the link anywhere, the server records cannot be looked up from the app, but the money and its transaction history stay visible in the merchant's NEAR account.
 
 ## Scope: what the app does not do
 
@@ -189,8 +213,8 @@ Protections on the hosted app and their limits:
 
 Run on the current tree:
 
-- `npm test`: **14 test files passed, 78 tests passed**, 0 failed.
-- `npx playwright test`: **20 tests passed** (`tests/e2e/flow.spec.ts` and `csp.spec.ts`, 360 px viewport, mocked API routes).
+- `npm test`: **15 test files passed, 107 tests passed**, 0 failed.
+- `npx playwright test`: **25 tests passed** (`tests/e2e/flow.spec.ts`, `csp.spec.ts` and `payments.spec.ts`, 360 px viewport, mocked API routes).
 - `npm run typecheck` (`next typegen && tsc --noEmit`): no errors. Plain `tsc` on a fresh clone needs the generated route types first.
 - `npx eslint .`: no errors.
 

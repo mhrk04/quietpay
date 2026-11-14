@@ -135,8 +135,16 @@ describe("security headers config", () => {
   it("sets the required headers for all routes", async () => {
     const rules = await nextConfig.headers!();
     const all = rules.find((r) => r.source === "/(.*)")!;
-    const h = Object.fromEntries(all.headers.map((x) => [x.key, x.value]));
+    const strictRule = rules.find((r) => r.source === "/((?!payments$).*)")!;
+    const payments = rules.find((r) => r.source === "/payments")!;
+    const h = Object.fromEntries([...all.headers, ...strictRule.headers].map((x) => [x.key, x.value]));
     expect(h["Content-Security-Policy"]).toContain("default-src 'self'");
+    expect(h["Content-Security-Policy"]).toContain("connect-src 'self';");
+    expect(h["Content-Security-Policy"]).not.toContain("githubusercontent");
+    const p = payments.headers.find((x) => x.key === "Content-Security-Policy")!.value;
+    expect(p).toContain("connect-src 'self' https://raw.githubusercontent.com");
+    expect(p).toContain("frame-ancestors 'none'");
+    expect(p).not.toMatch(/(connect|img|frame|script)-src[^;]*(\s\*|https:(\s|;|$))/);
     expect(h["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
     expect(h["Content-Security-Policy"]).toContain("object-src 'none'");
     expect(h["Content-Security-Policy"]).toContain("img-src 'self' data:");

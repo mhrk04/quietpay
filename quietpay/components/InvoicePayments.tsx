@@ -5,6 +5,7 @@ import { encodeInvoice, buildStatusLink, type Invoice } from "@/lib/link-codec";
 import { fromBaseUnits } from "@/lib/amount";
 import { fetchDepositStatus, fetchInvoiceDeposits, type DepositRecord } from "@/lib/payments-client";
 import { statusMessage } from "@/lib/status";
+import { chainName } from "@/lib/tokens";
 
 type Row = { deposit: DepositRecord; status: string | null };
 
@@ -46,7 +47,7 @@ export function InvoicePayments({ invoice }: { invoice: Invoice }) {
               <strong>
                 {fromBaseUnits(d.amountIn, d.origin.decimals)} {d.origin.symbol}
               </strong>{" "}
-              on {d.origin.blockchain}
+              on {chainName(d.origin.blockchain)}
               <span>{status ? statusMessage(status) : "Checking payment"}</span>
               <span className="create-hint">{new Date(d.createdAt).toLocaleString()}</span>
               <a

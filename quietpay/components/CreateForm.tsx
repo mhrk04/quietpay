@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { fromBaseUnits, toBaseUnits } from "@/lib/amount";
+import Link from "next/link";
 import { buildPayLink, validateInvoice, type Invoice } from "@/lib/link-codec";
 import { isValidNearAccount } from "@/lib/near-account";
 import { buildWhatsappUrl, paymentRequestMessage } from "@/lib/whatsapp";
@@ -89,6 +90,9 @@ export function CreateForm() {
 
   return (
     <div className="create-wrap">
+      <p>
+        <Link href="/payments">My payments (sign in with NEAR)</Link>
+      </p>
       <form className="create-form" onSubmit={onSubmit} noValidate>
         <label className="create-field">
           <span>Amount (USDC)</span>

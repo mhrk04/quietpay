@@ -7,7 +7,7 @@ import { GET as statusGet } from "@/app/api/status/route";
 import { POST as submitPost } from "@/app/api/deposit-submit/route";
 import { GET as invoiceGet } from "@/app/api/invoice/route";
 import { encodeInvoice } from "@/lib/link-codec";
-import { createMemoryStore, invoiceKeyFor, setPaymentsStoreForTests } from "@/lib/server/payments-store";
+import { accountKeyFor, createMemoryStore, invoiceKeyFor, setPaymentsStoreForTests } from "@/lib/server/payments-store";
 
 const validBody = {
   swapType: "EXACT_OUTPUT",
@@ -139,6 +139,22 @@ describe("quote recording and /api/invoice", () => {
     expect(list[0].origin.symbol).toBe("USDC");
     expect(JSON.stringify(list)).not.toMatch(/refund|evil-client|secret-jwt/);
   });
+  it("also indexes the deposit under the invoice's merchant account", async () => {
+    const store = setup();
+    await post(liveBody);
+    const rows = await store.listForAccount(accountKeyFor("shop.near"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ depositAddress: "0xdeposit", invoiceCode: code, description: "x", amount: "1" });
+    expect(JSON.stringify(rows)).not.toMatch(/refund|evil-client|secret-jwt/);
+    expect(await store.listForAccount(accountKeyFor("other.near"))).toEqual([]);
+  });
+  it("does not index dry quotes or mismatches", async () => {
+    const store = setup();
+    await post({ ...liveBody, dry: true });
+    await post({ ...liveBody, recipient: "other.near" });
+    expect(await store.listForAccount(accountKeyFor("shop.near"))).toEqual([]);
+    expect(await store.listForAccount(accountKeyFor("other.near"))).toEqual([]);
+  });
   it("does not record dry quotes", async () => {
     const store = setup();
     await post({ ...liveBody, dry: true });
@@ -171,6 +187,8 @@ describe("quote recording and /api/invoice", () => {
         throw new Error("boom");
       },
       list: async () => [],
+      recordForAccount: async () => {},
+      listForAccount: async () => [],
     });
     const res = await post(liveBody);
     expect(res.status).toBe(201);
