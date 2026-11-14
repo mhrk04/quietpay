@@ -66,20 +66,14 @@ test.describe("merchant header", () => {
     await page.route("**/api/auth/me", (r) => json(r, 200, { accountId: null }));
     await page.route("**/api/auth/challenge", (r) => json(r, 503, { message: "Sign-in is not set up" }));
     await page.goto("/");
-    // Record every URL pushed to the history; the flag is stripped from the address bar once handled.
-    await page.evaluate(() => {
-      const w = window as unknown as { __pushed: string[] };
-      w.__pushed = [];
-      const push = history.pushState.bind(history);
-      history.pushState = (data, unused, url) => {
-        w.__pushed.push(String(url));
-        push(data, unused, url);
-      };
+    // A full document request (not a client-side push) loads /payments?connect=1.
+    const docs: string[] = [];
+    page.on("request", (r) => {
+      if (r.resourceType() === "document") docs.push(r.url());
     });
     await page.getByRole("banner").getByRole("button", { name: "Connect wallet" }).click();
     await expect(page).toHaveURL(/\/payments/);
-    const pushed = await page.evaluate(() => (window as unknown as { __pushed: string[] }).__pushed);
-    expect(pushed.some((u) => u.includes("/payments?connect=1"))).toBe(true);
+    expect(docs.some((u) => u.includes("/payments?connect=1"))).toBe(true);
     await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
   });
 

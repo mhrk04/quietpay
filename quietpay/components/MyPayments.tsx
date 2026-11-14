@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import Link from "next/link";
 import { fromBaseUnits, toBaseUnits } from "@/lib/amount";
 import { fetchMyPayments, type AccountRecord } from "@/lib/auth-client";
 import { buildStatusLink, decodeInvoice } from "@/lib/link-codec";
@@ -243,9 +242,11 @@ export function MyPayments() {
           </svg>
           <h2>No payments yet</h2>
           <p>When a client pays one of your payment links, it shows up here with its live status.</p>
-          <Link className="btn btn--primary" href="/">
+          {/* Plain <a>: leaving /payments needs a full document load (different CSP). */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a className="btn btn--primary" href="/">
             Create a payment link
-          </Link>
+          </a>
         </section>
       )}
 

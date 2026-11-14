@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Brand } from "@/components/Brand";
 import { WalletButton } from "@/components/WalletButton";
 
@@ -9,12 +8,14 @@ export function MerchantHeader({ current }: { current: "create" | "payments" }) 
       <div className="site-header__inner">
         <Brand />
         <nav className="site-nav" aria-label="Main">
-          <Link className="site-nav__link" href="/" aria-current={current === "create" ? "page" : undefined}>
+          {/* Plain <a>, not next/link: /payments has a different CSP than the other pages, so crossing it needs a full document load. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a className="site-nav__link" href="/" aria-current={current === "create" ? "page" : undefined}>
             Create link
-          </Link>
-          <Link className="site-nav__link" href="/payments" aria-current={current === "payments" ? "page" : undefined}>
+          </a>
+          <a className="site-nav__link" href="/payments" aria-current={current === "payments" ? "page" : undefined}>
             Payments
-          </Link>
+          </a>
         </nav>
         <div className="site-header__actions">
           <WalletButton connectInPlace={current === "payments"} />

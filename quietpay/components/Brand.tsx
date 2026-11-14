@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export function BrandMark() {
   return (
     <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
@@ -10,11 +8,13 @@ export function BrandMark() {
   );
 }
 
+// Plain <a>, not next/link: /payments has its own CSP (wallet connector sources), so crossing it needs a full document load.
 export function Brand() {
   return (
-    <Link href="/" className="brand">
+    // eslint-disable-next-line @next/next/no-html-link-for-pages
+    <a href="/" className="brand">
       <BrandMark />
       <span>QuietPay</span>
-    </Link>
+    </a>
   );
 }

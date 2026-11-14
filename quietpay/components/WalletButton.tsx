@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { connectWallet, disconnectWallet, ensureSession, shortAccount, useSessionState } from "@/lib/session-store";
 
 type Props = {
@@ -14,7 +12,6 @@ type Props = {
 };
 
 export function WalletButton({ connectInPlace = false }: Props) {
-  const router = useRouter();
   const { session, connecting } = useSessionState();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -61,9 +58,10 @@ export function WalletButton({ connectInPlace = false }: Props) {
         {open && (
           <div className="menu__panel" id="account-menu">
             <span className="menu__label break">Signed in as {session.accountId}</span>
-            <Link className="menu__item" href="/payments" onClick={() => setOpen(false)}>
+            {/* Plain <a>, not next/link: /payments has a different CSP than the other pages, so crossing it needs a full document load. */}
+            <a className="menu__item" href="/payments" onClick={() => setOpen(false)}>
               My payments
-            </Link>
+            </a>
             <div className="menu__sep" role="separator" />
             <button
               type="button"
@@ -90,7 +88,8 @@ export function WalletButton({ connectInPlace = false }: Props) {
       title={unavailable ? "Sign-in is not set up" : undefined}
       onClick={() => {
         if (connectInPlace) void connectWallet();
-        else router.push("/payments?connect=1");
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        else window.location.href = "/payments?connect=1"; // full load: /payments has the CSP the connector needs
       }}
     >
       {connecting && <span className="spinner" aria-hidden="true" />}
