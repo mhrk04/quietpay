@@ -35,7 +35,9 @@ Each step is one action with one expected result. Run the app first (see Setup).
 5. Press "Confirm and get payment address". Expected: one live quote is requested, then the deposit address, QR code, exact amount, copy buttons, a countdown and a link to the status page appear. If the live amount differs from the dry quote, the new amount is shown and you must confirm again. **Sending tokens to this address moves real funds.**
 6. (Optional, real money) Send the shown amount of the selected token on the selected chain to the deposit address from your own wallet. Expected: your wallet shows the transfer. You may paste the transaction hash and press "Send hash to speed things up".
    Expected after step 5: the deposit view is saved in this browser. Reopen the same pay link before the countdown ends and you see the same address and amount with the note "You already started this payment", and no new quote is requested. "Start over with a new quote" clears it.
+   Expected after step 5, on another phone: open the same pay link there. If the payment is still pending you see "A payment was already started for this invoice" with "Continue with this payment" and "Start a new payment". If it was completed you see "This invoice is already paid" with a receipt link and no new quote. The refund address is not known on another device, so refunds still go to the address the payer entered.
 7. Press "Track this payment". Expected: the status page opens in a new tab, so the payment instructions stay open. While it waits for a deposit, the status page also shows the deposit address with a copy button and a "Back to payment instructions" link. To tell the merchant, press "Send tracking link to the merchant on WhatsApp". The merchant can also press "Check my NEAR account" on the Create page. It opens nearblocks.io and shows incoming USDC even when the payer does not share the tracking link. On the status page, expected: the page checks status immediately, then every 3 seconds, and shows "Waiting for your payment", then "Payment seen, confirming", then "Converting and sending".
+   Merchant check: on the Create page press "Check payments" under the new link or a saved invoice. Expected: each recorded payment is listed with its live status text and a "View payment status" link.
 8. Wait for the final status. Expected: "Payment complete" with the delivered amount, the merchant account and explorer links where the API returns them. Other final results are "Payment returned to you", "Payment failed" and "Not enough was sent". Polling stops.
 9. Press "Share receipt on WhatsApp". Expected: WhatsApp opens (`wa.me`) with a prefilled message holding the description, amount, merchant account and status page URL. Before success the button reads "Share status on WhatsApp" and the message holds only the status URL and the status.
 
@@ -88,6 +90,7 @@ Set these in `.env.local` (server side only). Never commit real values.
 |---|---|
 | `ONECLICK_JWT` | Partner JWT from https://partners.near-intents.org. Sent by the server to 1Click as `X-API-Key`. Enables confidential quotes (`confidentiality: "basic"`). Example: `ONECLICK_JWT=<your-partner-jwt>`. Never sent to the browser. |
 | `QUIETPAY_ALLOW_PUBLIC_FALLBACK` | Set to exactly `true` to allow public (not private) quotes when `ONECLICK_JWT` is empty. The UI then labels payments "Standard payment (not private)". Any other value, with no JWT, makes the server return HTTP 500 "Server is not configured". |
+| `BLOB_READ_WRITE_TOKEN` | Token of the private Vercel Blob store that holds payment records. Added by Vercel when the store is connected. Optional: without it, nothing is recorded. |
 | `QUIETPAY_LIVE_TESTS` | Set to exactly `true` to run read-only live tests against the real 1Click API. Unset means no test calls the real API. Live tests are not written yet (`tests/live/` is empty), so this variable currently has no effect. |
 
 Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `public`. Otherwise `unconfigured`.
@@ -104,6 +107,7 @@ Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `pu
 - **A2. Confidentiality scope.** The merchant's NEAR account and the USDC amount remain visible on NEAR. No claim of hiding from every observer.
 - **A3. Dry quote needs a refund address.** The API requires `refundTo` even for dry quotes, so the Pay page asks for a real refund address before quoting.
 - **A4. No quote before a token is chosen.** A quote needs an origin asset, so the dry quote appears after the payer picks a token and chain.
+- **A9. Payment records are shared by link.** Recorded deposits for an invoice are readable by anyone with the link (see "What the server stores"). Payments made before this feature, or when storage was unavailable, are not listed, so a payer on another device may not see them.
 - **A5. No database, so the invoice lives in the link.** The invoice (amount, account, description) is encoded in the URL. Anyone who edits the URL changes the invoice, so the merchant must check the amount actually received. The saved-links list is in the merchant's browser `localStorage` only.
 - **A6. Recipient USDC registration is not checked.** A NEAR account must be registered on the USDC contract to receive USDC. Whether 1Click registers it automatically is unverified.
 - **A7. Confidential status detail is unverified.** It is unknown whether status returns destination transaction hashes for confidential swaps. The status page works with empty hash arrays and just omits the links.
@@ -130,6 +134,13 @@ Read-only calls to `https://1click.chaindefuser.com`, first without a JWT:
 - Whether destination transaction hashes appear for confidential swaps.
 - Whether the recipient account needs, or gets, USDC registration.
 
+## What the server stores (payment records)
+
+- For each live quote the server itself received and that matches the invoice, QuietPay stores one small JSON record in a **private Vercel Blob store**, under `invoices/<sha256 of the invoice code>/<deposit address>.json`. The record holds the deposit address, deposit memo (if any), amounts, token and chain, quote deadline and creation time.
+- It stores **no refund address, no keys, no JWT, no IP address and no personal data**. At most 20 records are kept per invoice.
+- A record is written only for a live (`dry: false`) quote that succeeded, whose recipient and amount match the invoice code the payer's browser sent with the request. The deposit address always comes from the 1Click response, never from the browser. Dry quotes are never recorded.
+- **Anyone who has the payment link can read these records** through `/api/invoice`. Deposit addresses are public on-chain anyway, but this means QuietPay's server can link a deposit to an invoice and its merchant, even though the chain cannot. This is a limit of the confidentiality QuietPay offers (see the scope section above).
+- If the Blob store is not configured (`BLOB_READ_WRITE_TOKEN` missing), recording is skipped and the app works as before. A storage failure never blocks a quote or a payment. Only the server reads or writes the store (the browser never calls Blob), so the CSP is unchanged.
 ## Scope: what the app does not do
 
 - No smart contract, by design. Settlement is only through 1Click.
@@ -148,8 +159,8 @@ Protections on the hosted app and their limits:
 
 Run on the current tree:
 
-- `npm test`: **12 test files passed, 55 tests passed**, 0 failed.
-- `npx playwright test`: **11 tests passed** (`tests/e2e/flow.spec.ts` and `csp.spec.ts`, 360 px viewport, mocked API routes).
+- `npm test`: **14 test files passed, 78 tests passed**, 0 failed.
+- `npx playwright test`: **20 tests passed** (`tests/e2e/flow.spec.ts` and `csp.spec.ts`, 360 px viewport, mocked API routes).
 - `npm run typecheck` (`next typegen && tsc --noEmit`): no errors. Plain `tsc` on a fresh clone needs the generated route types first.
 - `npx eslint .`: no errors.
 
@@ -200,7 +211,7 @@ The code in this repository was written with AI assistance (Kiro). A human revie
 | `qrcode` | Renders QR codes for payment links and deposit addresses. |
 | Vitest | Unit test runner. |
 | fast-check | Property-based testing library (installed, no property tests written yet). |
-| Playwright | End-to-end test runner (10 tests in `tests/e2e/flow.spec.ts`). |
+| Playwright | End-to-end test runner (20 tests in `tests/e2e`). |
 | tsx | Runs `scripts/check-1click.ts`. |
 | ESLint, `eslint-config-next` | Linting. |
 | NEAR Intents 1Click API | External service that quotes, swaps and delivers USDC. |

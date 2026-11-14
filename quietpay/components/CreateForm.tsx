@@ -6,6 +6,7 @@ import { buildPayLink, validateInvoice, type Invoice } from "@/lib/link-codec";
 import { isValidNearAccount } from "@/lib/near-account";
 import { buildWhatsappUrl, paymentRequestMessage } from "@/lib/whatsapp";
 import { CopyButton } from "./CopyButton";
+import { InvoicePayments } from "./InvoicePayments";
 import { QrCode } from "./QrCode";
 
 const KEY = "quietpay:invoices";
@@ -152,6 +153,7 @@ export function CreateForm() {
           <a href={nearblocks(link.invoice.account)} target="_blank" rel="noopener noreferrer">
             Check my NEAR account
           </a>
+          <InvoicePayments invoice={link.invoice} />
           <p className="create-notice">
             The invoice is stored inside the link, so it works on any device. Anyone can edit a link, so always check that the amount you received is correct.
           </p>
@@ -173,6 +175,7 @@ export function CreateForm() {
                   <a href={nearblocks(inv.account)} target="_blank" rel="noopener noreferrer">
                     Check my NEAR account
                   </a>
+                  <InvoicePayments invoice={inv} />
                 </li>
               );
             })}

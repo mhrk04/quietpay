@@ -45,6 +45,8 @@ async function guard(page: Page): Promise<Api> {
     api.unmocked.push(route.request().url());
     return route.abort();
   });
+  // Default: no recorded payments for any invoice (tests override this).
+  await page.route("**/api/invoice**", (route) => json(route, 200, { deposits: [] }));
   page.on("request", (r) => {
     const p = new URL(r.url()).pathname;
     if (p.startsWith("/api/")) api.apiCalls.push(p);
@@ -423,4 +425,66 @@ test("Create page links to the merchant NEAR account on nearblocks", async ({ pa
   await expect(fresh).toHaveAttribute("rel", /noopener/);
   const saved = page.getByRole("region", { name: "Saved invoices" }).getByRole("link", { name: "Check my NEAR account" });
   await expect(saved.first()).toHaveAttribute("href", "https://nearblocks.io/address/near");
+});
+
+const RECORD = {
+  depositAddress: DEPOSIT,
+  depositMemo: null,
+  amountIn: "1010224",
+  minAmountIn: "1000121",
+  origin: { symbol: "USDC", blockchain: "eth", decimals: 6, assetId: TOKENS[0].assetId },
+  deadline: new Date(Date.now() + 20 * 60_000).toISOString(),
+  createdAt: new Date().toISOString(),
+};
+
+test("pay page on another device shows already paid and offers no new quote", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await mockSetup(page, api);
+  await page.route("**/api/invoice**", (r) => json(r, 200, { deposits: [RECORD] }));
+  await page.route("**/api/status**", (r) => json(r, 200, { status: "SUCCESS", swapDetails: {} }));
+  await page.goto(payUrl());
+  await expect(page.getByText("This invoice is already paid")).toBeVisible();
+  await expect(page.getByRole("link", { name: "View the receipt" })).toHaveAttribute("href", /\/status\?a=/);
+  await expect(page.getByRole("button", { name: "See what I will pay" })).toHaveCount(0);
+  expect(api.quotes).toHaveLength(0);
+});
+
+test("pay page on another device resumes a started payment", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await mockSetup(page, api);
+  await page.route("**/api/invoice**", (r) => json(r, 200, { deposits: [RECORD] }));
+  await page.route("**/api/status**", (r) => json(r, 200, { status: "PENDING_DEPOSIT", swapDetails: {} }));
+  await page.goto(payUrl());
+  await expect(page.getByText("A payment was already started for this invoice")).toBeVisible();
+  await page.getByRole("button", { name: "Continue with this payment" }).click();
+  await expect(page.getByRole("region", { name: "Payment instructions" })).toBeVisible();
+  await expect(page.getByText(DEPOSIT)).toBeVisible();
+  expect(api.quotes).toHaveLength(0);
+});
+
+test("pay page falls back to the normal flow when /api/invoice fails", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await mockSetup(page, api);
+  await page.route("**/api/invoice**", (r) => json(r, 502, { message: "x" }));
+  await page.goto(payUrl());
+  await expect(page.getByRole("region", { name: "Choose how to pay" })).toBeVisible();
+});
+
+test("merchant Check payments lists a deposit with its status text", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await page.route("**/api/invoice**", (r) => json(r, 200, { deposits: [RECORD] }));
+  await page.route("**/api/status**", (r) => json(r, 200, { status: "PROCESSING", swapDetails: {} }));
+  await page.goto("/");
+  await page.getByLabel("Amount (USDC)").fill("1");
+  await page.getByLabel("Merchant NEAR account").fill("near");
+  await page.getByRole("button", { name: "Create payment link" }).click();
+  const result = page.getByRole("region", { name: "Your payment link" });
+  await result.getByRole("button", { name: "Check payments" }).click();
+  await expect(result.getByText("Converting and sending")).toBeVisible();
+  await expect(result.getByRole("link", { name: "View payment status" })).toHaveAttribute("href", /\/status\?a=/);
+  await expect(result.getByRole("link", { name: "Check my NEAR account" })).toBeVisible();
 });

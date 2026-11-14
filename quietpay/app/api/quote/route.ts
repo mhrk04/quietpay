@@ -1,6 +1,7 @@
 import { guardRequest, readJsonCapped } from "@/lib/server/guard";
 import { getConfig } from "@/lib/server/config";
 import { proxyFetch, validateQuoteBody } from "@/lib/server/proxy";
+import { INVOICE_HEADER, recordLiveDeposit } from "@/lib/server/record-deposit";
 
 export async function POST(req: Request) {
   const blocked = guardRequest(req, "quote");
@@ -24,5 +25,6 @@ export async function POST(req: Request) {
     { method: "POST", body: JSON.stringify(payload), cache: "no-store" },
     { jwt: config.jwt },
   );
+  await recordLiveDeposit(req.headers.get(INVOICE_HEADER), body, r, config.jwt);
   return Response.json(r.body, { status: r.status, headers: { "Cache-Control": "no-store" } });
 }

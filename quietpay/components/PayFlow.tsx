@@ -31,6 +31,7 @@ import {
   setCachedTokens,
   type TokenInfo,
 } from "@/lib/tokens";
+import { classifyDeposits, fetchInvoiceDeposits, type Classified } from "@/lib/payments-client";
 import { PayDepositView } from "@/components/PayDepositView";
 import { TokenPicker } from "@/components/TokenPicker";
 
@@ -100,6 +101,10 @@ export function PayFlow() {
   const [liveDeadline, setLiveDeadline] = useState<string | null>(null);
 
   const [resumed, setResumed] = useState<ActiveDeposit | null>(null);
+  // Earlier payments for this invoice recorded by the server (any device).
+  const [remote, setRemote] = useState<Classified | null>(null);
+  const [remoteDone, setRemoteDone] = useState(false);
+  const [continued, setContinued] = useState(false);
   const destination = useMemo(() => (tokens ? findDestinationToken(tokens) : undefined), [tokens]);
 
   // Resume an unexpired deposit for this invoice (localStorage is only readable after mount).
@@ -107,6 +112,29 @@ export function PayFlow() {
     if (!invoice) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
     setResumed(loadActiveDeposit(encoded));
+  }, [invoice, encoded]);
+  // Ask the server for earlier payments; any failure falls back to the normal flow.
+  useEffect(() => {
+    if (!invoice) return;
+    if (loadActiveDeposit(encoded)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- local resume takes precedence
+      setRemoteDone(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const deposits = await fetchInvoiceDeposits(encoded);
+        if (cancelled) return;
+        if (deposits && deposits.length > 0) setRemote(await classifyDeposits(deposits));
+      } catch {
+        // ignore: normal flow
+      }
+      if (!cancelled) setRemoteDone(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [invoice, encoded]);
   // Save the active deposit once the deposit view is shown.
   useEffect(() => {
@@ -199,7 +227,7 @@ export function PayFlow() {
         "/api/quote",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-quietpay-invoice": encoded },
           body: prepared.body,
         },
         QUOTE_TIMEOUT_MS,
@@ -365,6 +393,77 @@ export function PayFlow() {
           onStartOver={startOver}
           onExpire={onResumedExpire}
         />
+      </>
+    );
+  }
+  if (remote?.kind === "paid") {
+    const d = remote.deposit;
+    return (
+      <>
+        {invoiceView}
+        <section className="pay-card" aria-label="Already paid">
+          <h2>This invoice is already paid</h2>
+          <p>A payment for this invoice was completed. No new payment is needed.</p>
+          <a
+            className="button"
+            href={buildStatusLink(window.location.origin, d.depositAddress, invoice, { deadline: Date.parse(d.deadline) })}
+          >
+            View the receipt
+          </a>
+        </section>
+      </>
+    );
+  }
+  if (remote?.kind === "pending" && continued) {
+    const d = remote.deposit;
+    const deadlineMs = Date.parse(d.deadline);
+    return (
+      <>
+        {invoiceView}
+        <PayDepositView
+          address={d.depositAddress}
+          memo={d.depositMemo ?? undefined}
+          amountText={fromBaseUnits(d.amountIn, d.origin.decimals)}
+          symbol={d.origin.symbol}
+          chain={d.origin.blockchain}
+          deadlineMs={deadlineMs}
+          statusHref={buildStatusLink(window.location.origin, d.depositAddress, invoice, { deadline: deadlineMs })}
+          invoice={invoice}
+          resumed
+          onStartOver={() => {
+            setContinued(false);
+            setRemote(null);
+          }}
+          onExpire={() => {
+            setContinued(false);
+            setRemote(null);
+          }}
+        />
+      </>
+    );
+  }
+  if (remote?.kind === "pending") {
+    return (
+      <>
+        {invoiceView}
+        <section className="pay-card" aria-label="Payment already started">
+          <h2>A payment was already started for this invoice</h2>
+          <p>You can continue with it, or start a new one.</p>
+          <button type="button" onClick={() => setContinued(true)}>
+            Continue with this payment
+          </button>
+          <button type="button" className="pay-secondary" onClick={() => setRemote(null)}>
+            Start a new payment
+          </button>
+        </section>
+      </>
+    );
+  }
+  if (!remoteDone) {
+    return (
+      <>
+        {invoiceView}
+        <p role="status">Checking for earlier payments…</p>
       </>
     );
   }
