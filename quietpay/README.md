@@ -6,6 +6,10 @@ QuietPay is a web app for taking a payment in USDC on NEAR. A merchant creates a
 - Stack: Next.js (App Router), TypeScript, no database, no smart contract.
 - Settlement is done only by the NEAR Intents 1Click API. QuietPay never holds funds or private keys.
 
+## Live demo
+
+https://quietpay-rust.vercel.app (hosted on Vercel, private mode enabled with a partner JWT stored as a Vercel secret). You can run the demo steps below on it without installing anything. Steps 1 to 5 spend nothing.
+
 ## MAINNET NOTICE (read before the demo)
 
 NEAR Intents and the 1Click API have no testnet. **A completed payment moves real funds on mainnet.** Recommended demo amount: **at most 1 USDC**. Steps 1 to 4 below (link, token choice, dry quote) spend nothing. Steps 5 onward only spend money if you send tokens to the deposit address.
