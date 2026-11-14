@@ -3,7 +3,7 @@
 QuietPay is a web app for taking a payment in USDC on NEAR. A merchant creates a payment link for an exact USDC amount. A payer opens the link, picks any supported token on any supported chain, sees a quote, and gets a deposit address. The merchant receives exactly the requested USDC in their NEAR account. Payer and merchant both get a live status page and a WhatsApp-shareable receipt.
 
 - Hackathon track: **realworld** (NEAR Hackathon, Real-World Money).
-- Stack: Next.js (App Router), TypeScript, no database, no smart contract.
+- Stack: Next.js (App Router), TypeScript, a private Vercel Blob store for payment records, no smart contract.
 - Settlement is done only by the NEAR Intents 1Click API. QuietPay never holds funds or private keys.
 
 ## Live demo
@@ -52,7 +52,7 @@ Steps 1 to 5 do not require sending money. Without sending funds, the status pag
 | 0:25 to 0:45 | Steps 3 and 4 | "The payer opens the link, picks a token and chain, and sees a dry quote: what they send, the minimum, and the exact USDC the merchant gets. No address yet." |
 | 0:45 to 0:55 | Step 5 | "After confirming, they get one deposit address with a countdown. Reopening the link brings back the same address. The 1Click API does the swap." |
 | 0:55 to 1:10 | Steps 6 to 8 | "I send from my wallet. Tracking opens in a new tab and checks every 3 seconds. The payer can send that link to the merchant, and the merchant can also check their NEAR account." |
-| 1:10 to 1:25 | Step 9 | "Either side shares a receipt on WhatsApp. No smart contract, no database, no keys. Confidential mode needs a partner JWT, and it does not hide the merchant account or amount on NEAR." |
+| 1:10 to 1:25 | Step 9 | "Either side shares a receipt on WhatsApp. No smart contract, no custody, no keys. Confidential mode needs a partner JWT, and it does not hide the merchant account or amount on NEAR." |
 
 ## Setup
 
@@ -108,7 +108,7 @@ Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `pu
 - **A3. Dry quote needs a refund address.** The API requires `refundTo` even for dry quotes, so the Pay page asks for a real refund address before quoting.
 - **A4. No quote before a token is chosen.** A quote needs an origin asset, so the dry quote appears after the payer picks a token and chain.
 - **A9. Payment records are shared by link.** Recorded deposits for an invoice are readable by anyone with the link (see "What the server stores"). Payments made before this feature, or when storage was unavailable, are not listed, so a payer on another device may not see them.
-- **A5. No database, so the invoice lives in the link.** The invoice (amount, account, description) is encoded in the URL. Anyone who edits the URL changes the invoice, so the merchant must check the amount actually received. The saved-links list is in the merchant's browser `localStorage` only.
+- **A5. The invoice lives in the link.** The invoice (amount, account, description) is encoded in the URL. Anyone who edits the URL changes the invoice, so the merchant must check the amount actually received. The saved-links list is in the merchant's browser `localStorage` only (see "If the merchant clears browser data").
 - **A6. Recipient USDC registration is not checked.** A NEAR account must be registered on the USDC contract to receive USDC. Whether 1Click registers it automatically is unverified.
 - **A7. Confidential status detail is unverified.** It is unknown whether status returns destination transaction hashes for confidential swaps. The status page works with empty hash arrays and just omits the links.
 - **A8. Mainnet only.** No testnet exists. Paid quotes spend real funds.
@@ -141,6 +141,35 @@ Read-only calls to `https://1click.chaindefuser.com`, first without a JWT:
 - A record is written only for a live (`dry: false`) quote that succeeded, whose recipient and amount match the invoice code the payer's browser sent with the request. The deposit address always comes from the 1Click response, never from the browser. Dry quotes are never recorded.
 - **Anyone who has the payment link can read these records** through `/api/invoice`. Deposit addresses are public on-chain anyway, but this means QuietPay's server can link a deposit to an invoice and its merchant, even though the chain cannot. This is a limit of the confidentiality QuietPay offers (see the scope section above).
 - If the Blob store is not configured (`BLOB_READ_WRITE_TOKEN` missing), recording is skipped and the app works as before. A storage failure never blocks a quote or a payment. Only the server reads or writes the store (the browser never calls Blob), so the CSP is unchanged.
+
+### Who can see and change payment records
+
+QuietPay has no user accounts and no login. **The payment link is the key.**
+
+| Who | Can do | How it is enforced |
+|---|---|---|
+| QuietPay's server | Read and write the Blob store | The store is private. The server authenticates to Vercel Blob with a short-lived Vercel OIDC token (or `BLOB_READ_WRITE_TOKEN`), held only in the server environment. The browser never talks to Blob, and a blob's URL opened without credentials returns HTTP 403 (checked on the live store). |
+| A payer confirming a payment | Cause one record to be written | Only through `/api/quote`, only after 1Click returns a successful live quote whose recipient and amount match the invoice. The deposit address is taken from 1Click's response. A browser cannot submit or change a deposit address, so nobody can plant a fake address on someone else's invoice. |
+| Anyone holding the payment link (payer, merchant, anyone it is forwarded to) | See that invoice's payments and their status | `/api/invoice?i=<code>` checks that the invoice code is valid, then looks in the folder named by the code's sha256 hash. Without the exact link the folder cannot be found or guessed. |
+| Everyone else | Nothing | There is no route that lists invoices. The API rejects calls from other websites and is rate-limited. |
+
+Limits:
+
+- The app does not prove that the person pressing "Check payments" is the merchant. Anyone with the link sees the same list. The link already shows the amount and merchant account, and deposit addresses are public on-chain, so little extra is revealed, but **treat a payment link like a receipt: share it only with the payer.**
+- Records cannot be edited or deleted through the app. Only the project owner can remove them (Vercel dashboard or `vercel blob delete`).
+- Proving merchant identity would need a NEAR wallet sign-in (a signed NEP-413 message). Not built.
+
+### If the merchant clears browser data
+
+| What | Where it lives | After clearing browser data |
+|---|---|---|
+| The money | The merchant's NEAR account, on-chain | **Not affected.** Always visible with "Check my NEAR account" (nearblocks) or any NEAR wallet. |
+| Payment records (deposit address, amount, token, status) | Private Vercel Blob store, on the server | **Not affected.** |
+| The "Saved invoices" list on the Create page | That browser's `localStorage` | **Gone from that browser.** |
+| The payer's in-progress deposit on their own phone | The payer's browser `localStorage` | Gone from that browser only; reopening the link restores it from the server. |
+
+The records are found by the payment link itself, so after clearing browser data the merchant needs the link again, for example from the WhatsApp chat where it was sent. Opening the link on the Pay page shows the latest payment state: an in-progress payment to continue, or "This invoice is already paid" with the receipt link. The full "Check payments" list per invoice is on the Create page, which needs the invoice in that browser's "Saved invoices"; after clearing, it is not there until the merchant creates or re-adds it. Nothing on the server or on-chain is lost. If the merchant no longer has the link anywhere, the server records cannot be looked up from the app, but the money and its transaction history stay visible in the merchant's NEAR account.
+
 ## Scope: what the app does not do
 
 - No smart contract, by design. Settlement is only through 1Click.
@@ -155,6 +184,7 @@ Protections on the hosted app and their limits:
 - **Headers:** Content-Security-Policy (same-origin only; `script-src` keeps `'unsafe-inline'` because Next.js inline bootstrap scripts are used without nonces), X-Frame-Options DENY, Referrer-Policy no-referrer, X-Content-Type-Options nosniff, Permissions-Policy, Strict-Transport-Security.
 - **Error text:** payers see fixed messages, not upstream error text.
 - **Check who you are paying:** anyone can create a link that pays their own account. Payers should confirm they know and trust the person who sent the link before paying.
+
 ## Testing status
 
 Run on the current tree:
