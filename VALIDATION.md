@@ -9,7 +9,7 @@ QuietPay was checked on 2026-11-14 with six independent review passes (integrati
 | Code | Defects fixed | First run found a confirm loop after a price change, proxy routes that called 1Click when the server was unconfigured, a 401 that blocked retry, and an unused `swapType` guard. All four are fixed with regression tests. The re-run confirmed the fixes and found no regressions. |
 | Browser | PASS (re-run) | Real Chromium at 360 px: create, pay with a real dry-run quote, mocked confirm and status flows. 0 console errors, no horizontal overflow. |
 | Design | Not passed, accepted | Lighthouse performance 98-100, accessibility 89 on `/pay`. The visual design is minimal (no design system or branding). |
-| Alignment | Partial | Matches the brief except that private (Confidential Intents) quotes need a partner JWT, so they are implemented but untested. The demo runs in standard (public) mode. |
+| Alignment | Partial at run time | The only gap was untested private (Confidential Intents) quotes. Retested afterwards with a partner JWT: private dry-run quotes return `confidentiality: "basic"`, the server overrides client attempts to go public, the JWT never appears in responses or logs, and the Pay page shows the "Private payment" label. |
 
 ## Tests
 
@@ -19,6 +19,6 @@ QuietPay was checked on 2026-11-14 with six independent review passes (integrati
 ## Known limitations
 
 - No real end-to-end mainnet payment has been made with the app.
-- Private mode is untested without a partner JWT.
+- Private mode is tested only with dry-run quotes; no private live quote or payment has been made.
 - The payment link carries the invoice in the URL, so it is long and can be edited. The merchant must check what arrives.
 - The payer still sees some technical words, such as "refund address" and chain names.

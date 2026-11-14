@@ -61,7 +61,7 @@ Requires Node.js 20 or newer.
 2. Create the env file: `cp .env.example .env.local`.
 3. Edit `.env.local` and choose one mode. Without this step the Pay page shows "Payments are not set up".
    - **Public mode (no partner JWT, easiest for a judge):** set `QUIETPAY_ALLOW_PUBLIC_FALLBACK=true`. Payments are labeled "Standard payment (not private)".
-   - **Private mode:** set `ONECLICK_JWT` to your partner JWT. Private mode has not been tested (no JWT was available).
+   - **Private mode:** set `ONECLICK_JWT` to your partner JWT. Tested with dry-run quotes only (see "Real-API check").
 4. Start the app: `npm run dev` (http://localhost:3000). Restart it after changing `.env.local`.
 
 Other commands:
@@ -95,7 +95,7 @@ Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `pu
 
 ## Limitations (assumptions A1 to A8)
 
-- **A1. Confidential flow needs a JWT.** Without one, the app only works through the explicit public fallback flag, and the UI says the payment is not private.
+- **A1. Confidential flow needs a JWT.** With a partner JWT, private dry-run quotes work (tested 2026-11-14). Without one, the app only works through the explicit public fallback flag, and the UI says the payment is not private.
 - **A2. Confidentiality scope.** The merchant's NEAR account and the USDC amount remain visible on NEAR. No claim of hiding from every observer.
 - **A3. Dry quote needs a refund address.** The API requires `refundTo` even for dry quotes, so the Pay page asks for a real refund address before quoting.
 - **A4. No quote before a token is chosen.** A quote needs an origin asset, so the dry quote appears after the payer picks a token and chain.
@@ -106,9 +106,9 @@ Server modes: JWT set gives `confidential`. No JWT and fallback `true` gives `pu
 
 Other limits: unknown chains accept any non-empty refund address without spaces (the API is the final check). Without a JWT, 1Click adds a 0.25% fee, which the payer bears under `EXACT_OUTPUT`.
 
-## Real-API check results (task 3.1, 2026-11-14, no JWT)
+## Real-API check results (2026-11-14)
 
-Read-only calls to `https://1click.chaindefuser.com` without a JWT:
+Read-only calls to `https://1click.chaindefuser.com`, first without a JWT:
 
 - `GET /v0/tokens`: HTTP 200, 231 tokens.
 - Dry quote (`dry: true`, `EXACT_OUTPUT`): HTTP 201. The response had `quote.amountIn`, `quote.minAmountIn`, `quote.amountOut` and `quote.timeEstimate` (45 s in the example). It had no `depositAddress`, no `depositMemo` and no `quote.deadline`.
@@ -117,10 +117,11 @@ Read-only calls to `https://1click.chaindefuser.com` without a JWT:
 - Confidential (`confidentiality: "basic"`) without a JWT: HTTP 401, "User authentication is required for confidential intent quotes".
 - Status for an unknown deposit address: HTTP 404.
 
+**Private mode, tested 2026-11-14 with a partner JWT (dry-run quotes only):** `/api/config` returned `confidential`. A dry quote through `/api/quote` returned HTTP 201 with `quoteRequest.confidentiality: "basic"` (send 1.010222 USDC, merchant receives 1 USDC). A client request asking for `confidentiality: "public"` was overridden to `basic` by the server. The JWT did not appear in any response or in the server log. The Pay page showed the "Private payment" label in a real browser. A partner JWT alone was enough.
+
 **Not verified:**
 
-- The JWT path (no partner JWT was available), including whether a JWT alone is enough for confidential quotes.
-- Live quotes and a real payment end to end.
+- Live quotes and a real payment end to end, in either mode.
 - Whether destination transaction hashes appear for confidential swaps.
 - Whether the recipient account needs, or gets, USDC registration.
 
@@ -172,7 +173,7 @@ Accepted limitations:
 - Minimal visual design.
 - No property-based tests and no live API tests.
 - No real end-to-end payment has been run.
-- Private mode is untested without a partner JWT.
+- Private mode is tested only with dry-run quotes; no private live quote or payment has been made.
 - The payer still sees some technical words, such as "refund address" and chain names.
 
 ## Libraries and AI-assisted portions (hackathon rule Q-005)
