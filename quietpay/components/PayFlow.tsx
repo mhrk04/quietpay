@@ -17,6 +17,7 @@ import {
   type PartialQuoteResponse,
   type QuoteRequest,
 } from "@/lib/quote";
+import { quoteErrorMessage } from "@/lib/quote-errors";
 import { isValidRefundAddress } from "@/lib/refund-address";
 import {
   findDestinationToken,
@@ -172,19 +173,17 @@ export function PayFlow() {
         QUOTE_TIMEOUT_MS,
       );
     } catch {
-      return { ok: false, message: "The quote took too long or the connection failed. Please try again.", retry: true };
+      return { ok: false, message: quoteErrorMessage("network"), retry: true };
     }
     if (r.status === 401 && mode === "confidential") {
       return {
         ok: false,
-        message: "Private payments are unavailable right now. Your details are saved. Please try again later.",
+        message: quoteErrorMessage(401),
         retry: true,
       };
     }
     if (r.status < 200 || r.status >= 300) {
-      const apiMsg = (r.body as { message?: unknown } | null)?.message;
-      const detail = typeof apiMsg === "string" && apiMsg.length < 200 ? ` (${apiMsg})` : "";
-      return { ok: false, message: `We could not get a quote${detail}. Please try again.`, retry: true };
+      return { ok: false, message: quoteErrorMessage(r.status), retry: true };
     }
     const resp = r.body as PartialQuoteResponse | null;
     const quote = resp?.quote;

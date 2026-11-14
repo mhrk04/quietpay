@@ -74,7 +74,7 @@ describe("unconfigured server guard", () => {
   }
   it("/api/tokens", async () => {
     const f = unconfigured();
-    await expectGuarded(await tokensGet(), f);
+    await expectGuarded(await tokensGet(new Request("http://localhost/api/tokens")), f);
   });
   it("/api/status", async () => {
     const f = unconfigured();

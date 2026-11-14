@@ -131,12 +131,20 @@ Read-only calls to `https://1click.chaindefuser.com`, first without a JWT:
 - The app does not deploy to production, make the repository public, push to a remote, post on X, or submit to the hackathon API. Those are manual steps done by the project owner after explicit confirmation.
 - No private keys or seed phrases are requested, stored or sent. No funds are held.
 
+## Security
+Protections on the hosted app and their limits:
+- **Rate limit:** per client IP (first `x-forwarded-for` entry, else `x-real-ip`), `/api/quote` 30 requests per minute, other `/api/*` 120 per minute, HTTP 429 with `Retry-After`. It is in memory, so it is per server instance and resets on cold start. For stronger protection add a Vercel Firewall rate-limit rule.
+- **Cross-site check:** an API request whose `Origin` host differs from the request host gets HTTP 403. This stops other websites from calling the API from a visitor's browser. It does not stop scripts or tools, which can omit or forge `Origin`.
+- **Body cap:** `/api/quote` and `/api/deposit-submit` reject bodies over 10 KB with HTTP 413.
+- **Headers:** Content-Security-Policy (same-origin only; `script-src` keeps `'unsafe-inline'` because Next.js inline bootstrap scripts are used without nonces), X-Frame-Options DENY, Referrer-Policy no-referrer, X-Content-Type-Options nosniff, Permissions-Policy, Strict-Transport-Security.
+- **Error text:** payers see fixed messages, not upstream error text.
+- **Check who you are paying:** anyone can create a link that pays their own account. Payers should confirm they know and trust the person who sent the link before paying.
 ## Testing status
 
 Run on the current tree:
 
-- `npm test`: **11 test files passed, 43 tests passed**, 0 failed.
-- `npx playwright test`: **10 tests passed** (`tests/e2e/flow.spec.ts`, 360 px viewport, mocked API routes).
+- `npm test`: **12 test files passed, 55 tests passed**, 0 failed.
+- `npx playwright test`: **11 tests passed** (`tests/e2e/flow.spec.ts` and `csp.spec.ts`, 360 px viewport, mocked API routes).
 - `npm run typecheck` (`next typegen && tsc --noEmit`): no errors. Plain `tsc` on a fresh clone needs the generated route types first.
 - `npx eslint .`: no errors.
 
@@ -149,7 +157,7 @@ Partly covered (the spec asks for more than the tests do):
 Known non-blocking items:
 
 - The INCOMPLETE_DEPOSIT view may show "not available" for the required minimum, because the status API does not return it.
-- Raw upstream error messages are shown in quote errors.
+- Quote errors show fixed plain-language text by status. Raw upstream messages are no longer shown to payers.
 
 Not written: the optional property-based tests (`tests/property/` is empty) and the live read-only tests (`tests/live/` is empty). The real payment flow has not been run end to end.
 

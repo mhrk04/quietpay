@@ -1,8 +1,11 @@
+import { guardRequest } from "@/lib/server/guard";
 import { connection } from "next/server";
 import { getConfig } from "@/lib/server/config";
 import { proxyFetch } from "@/lib/server/proxy";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const blocked = guardRequest(req, "other");
+  if (blocked) return blocked;
   await connection(); // opt out of prerendering
   const config = getConfig();
   if (config.mode === "unconfigured") {

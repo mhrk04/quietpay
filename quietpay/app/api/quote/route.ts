@@ -1,17 +1,17 @@
+import { guardRequest, readJsonCapped } from "@/lib/server/guard";
 import { getConfig } from "@/lib/server/config";
 import { proxyFetch, validateQuoteBody } from "@/lib/server/proxy";
 
 export async function POST(req: Request) {
+  const blocked = guardRequest(req, "quote");
+  if (blocked) return blocked;
   const config = getConfig();
   if (config.mode === "unconfigured") {
     return Response.json({ message: "Server is not configured" }, { status: 500 });
   }
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ message: "Invalid JSON body" }, { status: 400 });
-  }
+  const parsed = await readJsonCapped(req);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const v = validateQuoteBody(body);
   if (!v.ok) return Response.json({ message: v.message }, { status: v.status });
 
