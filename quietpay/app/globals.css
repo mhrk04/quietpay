@@ -1,0 +1,84 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #111;
+  background: #fff;
+}
+main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+h1 { font-size: 1.5rem; margin: 0; }
+label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+input, select, textarea, button, .button {
+  font: inherit;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 1px solid #888;
+  border-radius: 8px;
+  width: 100%;
+}
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  color: #fff;
+  border-color: #111;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+a { color: #0645ad; }
+
+/* Status page */
+.status-card, .status-receipt { border: 1px solid #ccc; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.status-card p, .status-receipt h2 { margin: 0; }
+.status-main { font-size: 1.25rem; font-weight: 700; }
+.status-sub { color: #444; }
+.status-notice { margin: 0; padding: 12px; border-radius: 8px; background: #fff4d6; border: 1px solid #e0b84a; }
+.status-error { margin: 0; padding: 12px; border-radius: 8px; background: #fde8e8; border: 1px solid #c0392b; }
+.status-break { overflow-wrap: anywhere; word-break: break-word; }
+.status-dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.status-dl dt { font-weight: 600; }
+.status-dl dd { margin: 0; overflow-wrap: anywhere; }
+.status-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.status-link { display: inline-flex; align-items: center; min-height: 44px; }
+.status-hash { color: #666; margin-left: 4px; }
+
+/* Pay page */
+.pay-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #ccc; border-radius: 8px; }
+.pay-card h2 { margin: 0; font-size: 1.15rem; }
+.pay-card p { margin: 0; }
+.pay-big { font-size: 1.5rem; }
+.pay-label { font-size: 0.85rem; color: #555; }
+.pay-field { display: flex; flex-direction: column; gap: 6px; }
+.pay-value { font-size: 1.05rem; }
+.pay-break { word-break: break-all; overflow-wrap: anywhere; }
+.pay-hint { font-size: 0.85rem; color: #555; }
+.pay-badge { margin: 0; padding: 8px 12px; border-radius: 8px; background: #eef6ff; }
+.pay-warning { margin: 0; padding: 8px 12px; border-radius: 8px; background: #fff4d6; border: 1px solid #d9a400; }
+.pay-error { margin: 0; padding: 8px 12px; border-radius: 8px; background: #fde8e8; border: 1px solid #c00; display: flex; flex-direction: column; gap: 8px; }
+.pay-secondary { background: #fff; color: #111; }
+
+/* Create page */
+.create-wrap { display: flex; flex-direction: column; gap: 16px; }
+.create-form, .create-result { display: flex; flex-direction: column; gap: 12px; }
+.create-field { display: flex; flex-direction: column; gap: 4px; }
+.create-field input, .create-field textarea { min-height: 44px; font: inherit; padding: 8px; box-sizing: border-box; width: 100%; }
+.create-form button[type="submit"], .create-wa { min-height: 44px; }
+.create-wa { display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid #111; border-radius: 6px; }
+.create-hint { font-size: 0.85rem; color: #555; }
+.create-error { padding: 8px 12px; border-radius: 8px; background: #fde8e8; border: 1px solid #c0392b; }
+.create-notice { margin: 0; padding: 12px; border-radius: 8px; background: #fff4d6; border: 1px solid #e0b84a; }
+.create-break { overflow-wrap: anywhere; word-break: break-all; margin: 0; }
+.create-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.create-item { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #ccc; border-radius: 8px; }

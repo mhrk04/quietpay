@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+# build / deps
+node_modules/
+.next/
+target/
+*.wasm
+*.tsbuildinfo
+test-results/
+playwright-report/
+# AI agent and IDE config (not part of the project)
+.kiro/
+.agents/
+.specship/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+HACKATHON*.md
