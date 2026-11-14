@@ -321,12 +321,15 @@ describe("auth routes", () => {
       expect(f).not.toHaveBeenCalled();
     });
 
-    it("me: 401 without or with a bad/expired session; logout clears", async () => {
+    it("me: 200 with a null account without or with a bad/expired session (no-store); logout clears", async () => {
       setup();
-      expect((await meGet(new Request(url("/api/auth/me")))).status).toBe(401);
-      expect((await meGet(new Request(url("/api/auth/me"), { headers: { cookie: `${SESSION_COOKIE}=bad` } }))).status).toBe(401);
       const old = signToken({ accountId: ACCOUNT, exp: Date.now() - 1 }, SECRET);
-      expect((await meGet(new Request(url("/api/auth/me"), { headers: { cookie: `${SESSION_COOKIE}=${old}` } }))).status).toBe(401);
+      for (const headers of [undefined, { cookie: `${SESSION_COOKIE}=bad` }, { cookie: `${SESSION_COOKIE}=${old}` }]) {
+        const res = await meGet(new Request(url("/api/auth/me"), { headers }));
+        expect(res.status).toBe(200);
+        expect(res.headers.get("cache-control")).toBe("no-store");
+        expect(await res.json()).toEqual({ accountId: null });
+      }
       const out = await logoutPost(new Request(url("/api/auth/logout"), { method: "POST" }));
       expect(out.headers.getSetCookie()[0]).toMatch(new RegExp(`^${SESSION_COOKIE}=; .*Max-Age=0`));
     });

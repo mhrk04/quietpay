@@ -6,6 +6,6 @@ export async function GET(req: Request) {
   if (blocked) return blocked;
   if (!getSessionSecret()) return Response.json(NOT_SET_UP, { status: 503, headers: { "Cache-Control": "no-store" } });
   const s = readSession(req);
-  if (!s) return Response.json({ message: "Not signed in" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  if (!s) return Response.json({ accountId: null }, { headers: { "Cache-Control": "no-store" } });
   return Response.json({ accountId: s.accountId }, { headers: { "Cache-Control": "no-store" } });
 }

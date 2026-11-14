@@ -45,6 +45,8 @@ async function guard(page: Page): Promise<Api> {
     api.unmocked.push(route.request().url());
     return route.abort();
   });
+  // The merchant header on "/" asks who is signed in; these tests are signed out.
+  await page.route("**/api/auth/me", (route) => json(route, 200, { accountId: null }));
   // Default: no recorded payments for any invoice (tests override this).
   await page.route("**/api/invoice**", (route) => json(route, 200, { deposits: [] }));
   page.on("request", (r) => {
@@ -102,7 +104,7 @@ const statusUrl = (extra?: { refund?: string; deadline?: number }) =>
 async function toDry(page: Page) {
   await page.goto(payUrl());
   await page.getByRole("option", { name: /USDC\s*eth/i }).click();
-  await page.getByLabel("Refund address").fill(EVM);
+  await page.getByLabel(/for refunds/).fill(EVM);
   await page.getByRole("button", { name: "See what I will pay" }).click();
   await expect(page.getByText("Your quote")).toBeVisible();
 }
@@ -144,7 +146,7 @@ test("create -> pay -> dry quote -> confirm -> deposit view -> status success", 
   await page.goto(link);
   await expect(page.getByText("Standard payment (not private)")).toBeVisible();
   await page.getByRole("option", { name: /USDC\s*eth/i }).click();
-  await page.getByLabel("Refund address").fill(EVM);
+  await page.getByLabel(/for refunds/).fill(EVM);
   await page.getByRole("button", { name: "See what I will pay" }).click();
   await expect(page.getByText("Your quote")).toBeVisible();
   await expect(page.getByText("1.010224 USDC")).toBeVisible();
@@ -251,10 +253,10 @@ test("401 on a private quote keeps inputs and retries the same private request",
   });
   await page.goto(payUrl());
   await page.getByRole("option", { name: /USDC\s*eth/i }).click();
-  await page.getByLabel("Refund address").fill(EVM);
+  await page.getByLabel(/for refunds/).fill(EVM);
   await page.getByRole("button", { name: "See what I will pay" }).click();
   await expect(page.getByText("Private payments are unavailable")).toBeVisible();
-  await expect(page.getByLabel("Refund address")).toHaveValue(EVM);
+  await expect(page.getByLabel(/for refunds/)).toHaveValue(EVM);
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByText("Your quote")).toBeVisible();
   expect(api.quotes).toHaveLength(2);
@@ -268,7 +270,7 @@ test("401 on quote in confidential mode shows unavailable message", async ({ pag
   await page.route("**/api/quote", (r) => json(r, 401, { message: "Unauthorized" }));
   await page.goto(payUrl());
   await page.getByRole("option", { name: /USDC\s*eth/i }).click();
-  await page.getByLabel("Refund address").fill(EVM);
+  await page.getByLabel(/for refunds/).fill(EVM);
   await page.getByRole("button", { name: "See what I will pay" }).click();
   await expect(page.getByText("Private payments are unavailable")).toBeVisible();
 });

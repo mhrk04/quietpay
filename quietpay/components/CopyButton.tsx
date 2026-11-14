@@ -20,18 +20,15 @@ export function CopyButton({ value, label }: Props) {
   }
 
   return (
-    <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <button type="button" onClick={onClick} aria-label={`Copy ${label}`}>
+    <span className="inline-copy">
+      <button type="button" className="btn btn--sm" onClick={onClick} aria-label={`Copy ${label}`}>
         {state === "copied" ? "✓ Copied" : `Copy ${label}`}
       </button>
       <span role="status" aria-live="polite">
         {state === "failed" && (
           <>
             <span>Copy failed. Select and copy the text below:</span>
-            <code
-              style={{ display: "block", wordBreak: "break-all", userSelect: "all" }}
-              tabIndex={0}
-            >
+            <code className="copy-failed" tabIndex={0}>
               {value}
             </code>
           </>

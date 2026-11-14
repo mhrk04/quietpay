@@ -26,8 +26,8 @@ export function QrCode({ value, size = 220, label = "QR code" }: Props) {
     };
   }, [value, size]);
 
-  if (failed) return <p role="alert">Could not draw the QR code. Use the address text instead.</p>;
-  if (!src) return <div style={{ width: size, maxWidth: "100%", aspectRatio: "1" }} aria-hidden="true" />;
+  if (failed) return <p className="notice notice--warning" role="alert">Could not draw the QR code. Use the address text instead.</p>;
+  if (!src) return <div className="qr-placeholder skeleton" aria-hidden="true" />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={label} width={size} height={size} style={{ maxWidth: "100%", height: "auto" }} />;
+  return <img className="qr" src={src} alt={label} width={size} height={size} />;
 }

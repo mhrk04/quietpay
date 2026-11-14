@@ -1,14 +1,20 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { MyPayments } from "@/components/MyPayments";
+import { MerchantHeader } from "@/components/SiteHeader";
+
+export const metadata: Metadata = { title: "Payments" };
 
 export default function PaymentsPage() {
   return (
-    <main>
-      <h1>My payments</h1>
-      <MyPayments />
-      <p>
-        <Link href="/">Create a payment link</Link>
-      </p>
-    </main>
+    <>
+      <MerchantHeader current="payments" />
+      <main id="main" className="page">
+        <div className="page-head page-head--compact">
+          <h1>Payments</h1>
+          <p>Every payment made to your payment links, with its live status.</p>
+        </div>
+        <MyPayments />
+      </main>
+    </>
   );
 }

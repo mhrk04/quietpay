@@ -53,3 +53,28 @@ export function refundReasonText(r?: string): string {
   }
   return "The payment could not be completed";
 }
+
+export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+/** Dashboard grouping: paid, still moving, or returned/failed. */
+export type StatusCategory = "paid" | "progress" | "returned";
+export interface StatusBadgeInfo {
+  label: string;
+  tone: StatusTone;
+  category: StatusCategory;
+}
+
+const BADGES: Record<SwapStatus, StatusBadgeInfo> = {
+  PENDING_DEPOSIT: { label: "Waiting for payment", tone: "warning", category: "progress" },
+  KNOWN_DEPOSIT_TX: { label: "Confirming", tone: "info", category: "progress" },
+  PROCESSING: { label: "Processing", tone: "info", category: "progress" },
+  SUCCESS: { label: "Paid", tone: "success", category: "paid" },
+  REFUNDED: { label: "Returned", tone: "neutral", category: "returned" },
+  FAILED: { label: "Failed", tone: "danger", category: "returned" },
+  INCOMPLETE_DEPOSIT: { label: "Not enough sent", tone: "danger", category: "returned" },
+};
+
+/** Short badge text, color tone and dashboard group. Unknown or unavailable statuses count as in progress. */
+export function statusBadge(s: string | null): StatusBadgeInfo {
+  if (s !== null && Object.prototype.hasOwnProperty.call(BADGES, s)) return BADGES[s as SwapStatus];
+  return { label: "Status unavailable", tone: "neutral", category: "progress" };
+}

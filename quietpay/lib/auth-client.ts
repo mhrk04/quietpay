@@ -30,7 +30,7 @@ export async function fetchMe(): Promise<AuthResult<string | null>> {
   const r = await call("/api/auth/me");
   if (!r) return { ok: false, message: "Could not reach the server. Try again in a moment." };
   if (r.status === 200 && typeof r.body.accountId === "string") return { ok: true, value: r.body.accountId };
-  if (r.status === 401) return { ok: true, value: null };
+  if (r.status === 200 && r.body.accountId === null) return { ok: true, value: null };
   if (r.status === 503) return { ok: false, message: "Sign-in is not set up", notSetUp: true };
   return { ok: false, message: msg(r.body, "Could not check your sign-in. Try again in a moment.") };
 }

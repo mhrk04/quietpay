@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Countdown } from "@/components/Countdown";
 import { CopyButton } from "@/components/CopyButton";
 import { QrCode } from "@/components/QrCode";
+import { chainName } from "@/lib/tokens";
 import { buildWhatsappUrl, trackingMessage, type WhatsappInvoice } from "@/lib/whatsapp";
 
 type Props = {
@@ -47,28 +48,38 @@ export function PayDepositView(p: Props) {
     }
   }
 
+  const chain = chainName(p.chain);
   return (
-    <section className="pay-card" aria-label="Payment instructions">
+    <section className="card pay-card" aria-label="Payment instructions">
       <h2>Send your payment</h2>
       {p.resumed && (
-        <p role="status">
-          You already started this payment. Send to the same address below.{" "}
-          <button type="button" className="pay-secondary" onClick={p.onStartOver}>
-            Start over with a new quote
-          </button>
+        <p className="notice notice--info" role="status">
+          <span>You already started this payment. Send to the same address below.</span>
+          <span>
+            <button type="button" className="btn btn--sm" onClick={p.onStartOver}>
+              Start over with a new quote
+            </button>
+          </span>
         </p>
       )}
-      <p className="pay-warning" role="note">
-        Send only {p.symbol} on {p.chain}. Anything else may be lost.
+      <p className="notice notice--warning" role="note">
+        Send only {p.symbol} on {chain}. Anything else may be lost.
       </p>
-      <p>
-        Time left: <strong><Countdown deadlineMs={p.deadlineMs} onExpire={p.onExpire} /></strong>
+      <p className="pay-deadline">
+        <span>Time left</span>
+        <strong>
+          <Countdown deadlineMs={p.deadlineMs} onExpire={p.onExpire} />
+        </strong>
       </p>
-      <QrCode value={p.address} label="QR code of the payment address" />
+      <div className="pay-qr">
+        <QrCode value={p.address} label="QR code of the payment address" />
+      </div>
       <div className="pay-field">
         <span className="pay-label">Amount to send</span>
-        <strong className="pay-value">{p.amountText} {p.symbol}</strong>
-        <span>on {p.chain}</span>
+        <strong className="pay-amount">
+          {p.amountText} {p.symbol}
+        </strong>
+        <span className="small muted">on {chain}</span>
         <CopyButton value={p.amountText} label="amount" />
       </div>
       <div className="pay-field">
@@ -81,25 +92,25 @@ export function PayDepositView(p: Props) {
           <span className="pay-label">Memo</span>
           <code className="pay-value pay-break">{p.memo}</code>
           <CopyButton value={p.memo} label="memo" />
-          <p className="pay-warning" role="alert">
+          <p className="notice notice--danger" role="alert">
             You must include this memo. If you leave it out, your funds are lost.
           </p>
         </div>
       )}
-      <a className="button" href={p.statusHref} target="_blank" rel="noopener noreferrer">
+      <a className="btn btn--primary btn--block" href={p.statusHref} target="_blank" rel="noopener noreferrer">
         Track this payment
       </a>
       <a
-        className="button"
+        className="btn btn--block"
         href={buildWhatsappUrl(trackingMessage(p.invoice, p.statusHref))}
         target="_blank"
         rel="noopener noreferrer"
       >
         Send tracking link to the merchant on WhatsApp
       </a>
-      <div className="pay-field">
-        <label>
-          Transaction hash (optional)
+      <div className="stack-sm">
+        <label className="field">
+          Transaction ID (optional)
           <input
             value={hash}
             onChange={(e) => {
@@ -109,14 +120,15 @@ export function PayDepositView(p: Props) {
             placeholder="Paste it after you send"
             autoComplete="off"
           />
+          <span className="field__hint">The ID your wallet shows after you send. It helps us spot your payment faster.</span>
         </label>
-        <button type="button" onClick={submit} disabled={!hash.trim() || submitState === "sending"}>
-          {submitState === "failed" ? "Try sending the hash again" : "Send hash to speed things up"}
+        <button type="button" className="btn" onClick={submit} disabled={!hash.trim() || submitState === "sending"}>
+          {submitState === "failed" ? "Try sending the ID again" : "Send ID to speed things up"}
         </button>
-        <span role="status" aria-live="polite">
-          {submitState === "sent" && "Hash received."}
+        <span role="status" aria-live="polite" className="small">
+          {submitState === "sent" && "Transaction ID received."}
           {submitState === "failed" &&
-            "Could not send the hash. We are still watching for your payment. You can try again."}
+            "Could not send the ID. We are still watching for your payment. You can try again."}
         </span>
       </div>
     </section>

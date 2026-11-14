@@ -25,7 +25,7 @@ async function mockSignedIn(page: Page) {
   await page.route("**/api/status**", (r) => json(r, 200, { status: "SUCCESS" }));
 }
 
-test("signed in: shows account, payment list with readable chain, status and link; sign out works", async ({ page }) => {
+test("signed in: header shows the account; table shows readable chain, status and link; sign out works", async ({ page }) => {
   await mockSignedIn(page);
   let loggedOut = false;
   await page.route("**/api/auth/logout", (r) => {
@@ -33,48 +33,50 @@ test("signed in: shows account, payment list with readable chain, status and lin
     return json(r, 200, { ok: true });
   });
   await page.goto("/payments");
-  await expect(page.getByText("shop.near").first()).toBeVisible();
-  const item = page.getByRole("listitem").filter({ hasText: "Coffee order" });
-  await expect(item).toContainText("1 USDC requested");
-  await expect(item).toContainText("1.010224 USDC on Ethereum");
-  await expect(item).not.toContainText("on eth ");
-  await expect(item).toContainText("Payment complete");
-  const href = await item.getByRole("link", { name: "View payment status" }).getAttribute("href");
+  await expect(page.getByRole("button", { name: /shop\.near/ })).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "Coffee order" });
+  await expect(row).toContainText("1.010224 USDC");
+  await expect(row).toContainText("on Ethereum");
+  await expect(row).not.toContainText("on eth ");
+  await expect(row).toContainText("Paid");
+  const href = await row.getByRole("link", { name: /View/ }).getAttribute("href");
   expect(href).toContain("/status?a=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   expect(href).toContain("&d=");
   expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: /shop\.near/ }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("button", { name: "Sign in with NEAR" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to see your payments" })).toBeVisible();
   expect(loggedOut).toBe(true);
 });
-
 test("signed in with no payments and with a load error", async ({ page }) => {
   await page.route("**/api/auth/me", (r) => json(r, 200, { accountId: "shop.near" }));
   await page.route("**/api/my-payments", (r) => json(r, 200, { accountId: "shop.near", payments: [] }));
   await page.goto("/payments");
-  await expect(page.getByText("No payments yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No payments yet" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create a payment link" })).toHaveAttribute("href", "/");
   await page.unroute("**/api/my-payments");
   await page.route("**/api/my-payments", (r) => json(r, 502, { message: "Payments could not be loaded" }));
   await page.reload();
-  await expect(page.locator(".create-error")).toContainText("Payments could not be loaded");
+  await expect(page.getByRole("alert").filter({ hasText: "Payments could not be loaded" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
-
 test("signed out, and sign-in not set up", async ({ page }) => {
-  await page.route("**/api/auth/me", (r) => json(r, 401, { message: "Not signed in" }));
+  await page.route("**/api/auth/me", (r) => json(r, 200, { accountId: null }));
   await page.goto("/payments");
-  await expect(page.getByRole("button", { name: "Sign in with NEAR" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toHaveCount(2);
+  await expect(page.getByText(/No transaction is made and no fee is charged/)).toBeVisible();
   await page.unroute("**/api/auth/me");
   await page.route("**/api/auth/me", (r) => json(r, 503, { message: "Sign-in is not set up" }));
   await page.reload();
   await expect(page.getByText("Sign-in is not set up")).toBeVisible();
 });
-
-test("Create page links to My payments", async ({ page }) => {
+test("Create page links to Payments from the header", async ({ page }) => {
+  await page.route("**/api/auth/me", (r) => json(r, 200, { accountId: null }));
   await page.goto("/");
-  await page.getByRole("link", { name: "My payments (sign in with NEAR)" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Payments" }).click();
   await expect(page).toHaveURL(/\/payments$/);
 });
-
 test("CSP: /payments allows the wallet selector with 0 CSP errors; / and /pay stay strict", async ({ page }) => {
   test.setTimeout(120_000);
   const problems: string[] = [];
@@ -82,7 +84,7 @@ test("CSP: /payments allows the wallet selector with 0 CSP errors; / and /pay st
     if (/content security policy|refused to/i.test(m.text())) problems.push(m.text());
   });
   page.on("pageerror", (e) => problems.push(e.message));
-  await page.route("**/api/auth/me", (r) => json(r, 401, { message: "Not signed in" }));
+  await page.route("**/api/auth/me", (r) => json(r, 200, { accountId: null }));
   await page.route("**/api/auth/challenge", (r) =>
     json(r, 200, { message: "Sign in to QuietPay", recipient: "localhost:3100", nonce: Buffer.alloc(32, 7).toString("base64") }),
   );
@@ -92,14 +94,14 @@ test("CSP: /payments allows the wallet selector with 0 CSP errors; / and /pay st
   expect(csp).toContain("frame-ancestors 'none'");
   expect(csp).not.toMatch(/(connect|img)-src[^;]*\s\*/);
   expect(res!.headers()["x-frame-options"]).toBe("DENY");
-  await page.getByRole("button", { name: "Sign in with NEAR" }).click();
+  await page.getByRole("button", { name: "Connect wallet" }).first().click();
   // The connector fetches its wallet list from GitHub (real network) and shows the selector.
   await expect(page.locator(".connect-item").first()).toBeVisible({ timeout: 20_000 });
   expect(problems).toEqual([]);
   // Choose each wallet so its sandboxed script is fetched and started under the policy.
   for (const id of ["hot-wallet", "meteor-wallet", "mynearwallet", "intear-wallet", "near-mobile", "nightly-wallet"]) {
     await page.reload();
-    await page.getByRole("button", { name: "Sign in with NEAR" }).click();
+    await page.getByRole("button", { name: "Connect wallet" }).first().click();
     await page.locator(`.connect-item[data-type="${id}"]`).click();
     await page.waitForTimeout(4000);
     expect(problems, `CSP errors after opening ${id}`).toEqual([]);

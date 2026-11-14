@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { buildPayLink, parseStatusLink } from "@/lib/link-codec";
 import { createPoller, type PollerDeps, type PollerView, type StatusBody } from "@/lib/poller";
-import { refundReasonText, statusMessage } from "@/lib/status";
+import { refundReasonText, statusBadge, statusMessage } from "@/lib/status";
 import { buildReceiptShareUrl, buildWhatsappUrl, statusOnlyMessage } from "@/lib/whatsapp";
 import { CopyButton } from "@/components/CopyButton";
 import { Receipt, TxLinks, safeTxLinks } from "@/components/Receipt";
@@ -130,17 +130,20 @@ export default function StatusView() {
   return (
     <>
       <h1>Payment status</h1>
-      <section className="status-card" aria-live="polite">
-        <p className="status-main">{heading}</p>
+      <section className="status-card status-hero" aria-live="polite">
+        <p className="status-main">
+          <span className={`badge badge--lg badge--${status ? statusBadge(status).tone : "neutral"}`}>{heading}</span>
+        </p>
+        <p className="status-amount tabular">{invoice.amount} USDC</p>
         <p className="status-sub">
-          {invoice.amount} USDC to <span className="status-break">{invoice.account}</span>
+          to <span className="status-break mono">{invoice.account}</span>
         </p>
       </section>
 
       {showDeposit && (
         <section className="status-card" aria-label="Deposit address">
           <p>Deposit address</p>
-          <code className="status-break">{address}</code>
+          <code className="status-break break-all">{address}</code>
           <CopyButton value={address as string} label="address" />
           <a href={payHref}>Back to payment instructions</a>
         </section>
@@ -211,7 +214,7 @@ export default function StatusView() {
         </section>
       )}
 
-      <a className="button" href={shareUrl} target="_blank" rel="noopener noreferrer">
+      <a className="btn btn--primary btn--block" href={shareUrl} target="_blank" rel="noopener noreferrer">
         {status === "SUCCESS" ? "Share receipt on WhatsApp" : "Share status on WhatsApp"}
       </a>
     </>

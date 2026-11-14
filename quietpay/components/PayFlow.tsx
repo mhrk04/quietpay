@@ -26,12 +26,14 @@ import {
 import { quoteErrorMessage } from "@/lib/quote-errors";
 import { isValidRefundAddress } from "@/lib/refund-address";
 import {
+  chainName,
   findDestinationToken,
   getCachedTokens,
   setCachedTokens,
   type TokenInfo,
 } from "@/lib/tokens";
 import { classifyDeposits, fetchInvoiceDeposits, type Classified } from "@/lib/payments-client";
+import { Checkout } from "@/components/Checkout";
 import { PayDepositView } from "@/components/PayDepositView";
 import { TokenPicker } from "@/components/TokenPicker";
 
@@ -264,7 +266,7 @@ export function PayFlow() {
   async function requestDry() {
     if (!invoice || !origin || !destination) return;
     if (!isValidRefundAddress(origin.blockchain, refund.trim())) {
-      setRefundError(`Refund address: enter a valid ${origin.blockchain} address.`);
+      setRefundError(`Your address for refunds: enter a valid ${chainName(origin.blockchain)} address.`);
       return;
     }
     setRefundError("");
@@ -355,28 +357,17 @@ export function PayFlow() {
 
   if (!invoice) {
     return (
-      <section className="pay-card" role="alert">
+      <section className="card pay-card" role="alert">
         <h2>Invalid link</h2>
         <p>This payment link is not valid. Ask the person who sent it for a new one.</p>
       </section>
     );
   }
 
-  const invoiceView = (
-    <section className="pay-card" aria-label="Invoice">
-      <span className="pay-label">Amount due</span>
-      <strong className="pay-big">{invoice.amount} USDC</strong>
-      {invoice.description && <p>{invoice.description}</p>}
-      <span className="pay-label">Paying to</span>
-      <code className="pay-break">{invoice.account}</code>
-    </section>
-  );
-
   if (resumed) {
     const amountText = fromBaseUnits(resumed.amountIn, resumed.origin.decimals);
     return (
-      <>
-        {invoiceView}
+      <Checkout invoice={invoice} step={3}>
         <PayDepositView
           address={resumed.address}
           memo={resumed.memo}
@@ -393,33 +384,31 @@ export function PayFlow() {
           onStartOver={startOver}
           onExpire={onResumedExpire}
         />
-      </>
+      </Checkout>
     );
   }
   if (remote?.kind === "paid") {
     const d = remote.deposit;
     return (
-      <>
-        {invoiceView}
-        <section className="pay-card" aria-label="Already paid">
+      <Checkout invoice={invoice}>
+        <section className="card pay-card" aria-label="Already paid">
           <h2>This invoice is already paid</h2>
           <p>A payment for this invoice was completed. No new payment is needed.</p>
           <a
-            className="button"
+            className="btn btn--primary"
             href={buildStatusLink(window.location.origin, d.depositAddress, invoice, { deadline: Date.parse(d.deadline) })}
           >
             View the receipt
           </a>
         </section>
-      </>
+      </Checkout>
     );
   }
   if (remote?.kind === "pending" && continued) {
     const d = remote.deposit;
     const deadlineMs = Date.parse(d.deadline);
     return (
-      <>
-        {invoiceView}
+      <Checkout invoice={invoice} step={3}>
         <PayDepositView
           address={d.depositAddress}
           memo={d.depositMemo ?? undefined}
@@ -439,53 +428,58 @@ export function PayFlow() {
             setRemote(null);
           }}
         />
-      </>
+      </Checkout>
     );
   }
   if (remote?.kind === "pending") {
     return (
-      <>
-        {invoiceView}
-        <section className="pay-card" aria-label="Payment already started">
+      <Checkout invoice={invoice}>
+        <section className="card pay-card" aria-label="Payment already started">
           <h2>A payment was already started for this invoice</h2>
           <p>You can continue with it, or start a new one.</p>
-          <button type="button" onClick={() => setContinued(true)}>
+          <button type="button" className="btn btn--primary" onClick={() => setContinued(true)}>
             Continue with this payment
           </button>
-          <button type="button" className="pay-secondary" onClick={() => setRemote(null)}>
+          <button type="button" className="btn" onClick={() => setRemote(null)}>
             Start a new payment
           </button>
         </section>
-      </>
+      </Checkout>
     );
   }
   if (!remoteDone) {
     return (
-      <>
-        {invoiceView}
-        <p role="status">Checking for earlier payments…</p>
-      </>
+      <Checkout invoice={invoice}>
+        <p className="muted" role="status">
+          <span className="spinner" aria-hidden="true" /> Checking for earlier payments…
+        </p>
+      </Checkout>
     );
   }
   if (mode === "unconfigured") {
     return (
-      <>
-        {invoiceView}
-        <p className="pay-error" role="alert">
+      <Checkout invoice={invoice}>
+        <p className="notice notice--danger" role="alert">
           Payments are not set up on this server. The owner must add a partner key or enable standard payments.
         </p>
-      </>
+      </Checkout>
     );
   }
 
   const label =
     mode === "confidential" ? (
-      <p className="pay-badge">
-        <strong>Private payment</strong>. Your deposit cannot be linked to the payout on-chain. The merchant account and
-        USDC amount stay visible on NEAR.
+      <p className="private-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="5" y="11" width="14" height="9" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+        <span>
+          <strong>Private payment</strong>. Your deposit cannot be linked to the payout on-chain. The merchant account and
+          USDC amount stay visible on NEAR.
+        </span>
       </p>
     ) : mode === "public" ? (
-      <p className="pay-badge">
+      <p className="notice notice--info">
         <strong>Standard payment (not private)</strong>
       </p>
     ) : null;
@@ -502,8 +496,7 @@ export function PayFlow() {
       deadline: deadlineMs,
     });
     return (
-      <>
-        {invoiceView}
+      <Checkout invoice={invoice} step={3}>
         {label}
         <PayDepositView
           address={liveAddress}
@@ -516,29 +509,28 @@ export function PayFlow() {
           invoice={invoice}
           onExpire={onExpire}
         />
-      </>
+      </Checkout>
     );
   }
 
   if (phase === "expired") {
     return (
-      <>
-        {invoiceView}
-        <section className="pay-card" role="alert">
+      <Checkout invoice={invoice}>
+        <section className="card pay-card" role="alert">
           <h2>This quote has expired</h2>
           <p>Do not send anything to the old address. Get a new quote to continue.</p>
-          <button type="button" onClick={newQuote} disabled={busy}>
+          <button type="button" className="btn btn--primary" onClick={newQuote} disabled={busy}>
             Get a new quote
           </button>
         </section>
-        {error && <p className="pay-error" role="alert">{error}</p>}
-      </>
+        {error && <p className="notice notice--danger" role="alert">{error}</p>}
+      </Checkout>
     );
   }
 
   const quoteView =
     (phase === "dry" || phase === "reconfirm") && origin && destination && dryQuote ? (
-      <section className="pay-card" aria-label="Quote">
+      <section className="card pay-card" aria-label="Quote">
         {phase === "reconfirm" && live ? (
           <>
             <h2>The price changed</h2>
@@ -551,83 +543,103 @@ export function PayFlow() {
         ) : (
           <>
             <h2>Your quote</h2>
-            <p>
-              You send: <strong>{amountFor(dryQuote.amountIn, origin)} {origin.symbol}</strong>
-            </p>
-            <p>Minimum accepted: {amountFor(dryQuote.minAmountIn, origin)} {origin.symbol}</p>
-            <p>
-              Merchant receives: <strong>{invoice.amount} {destination.symbol}</strong>
-            </p>
-            {readTimeEstimate(dryResp) !== undefined && (
-              <p>Estimated time: {formatEstimate(readTimeEstimate(dryResp) as number)}</p>
-            )}
+            <div className="quote-rows">
+              <div className="quote-row quote-row--total">
+                <span>You send</span>
+                <strong>{amountFor(dryQuote.amountIn, origin)} {origin.symbol}</strong>
+              </div>
+              <div className="quote-row">
+                <span>On</span>
+                <strong>{chainName(origin.blockchain)}</strong>
+              </div>
+              <div className="quote-row">
+                <span>Minimum accepted</span>
+                <span className="tabular">{amountFor(dryQuote.minAmountIn, origin)} {origin.symbol}</span>
+              </div>
+              <div className="quote-row">
+                <span>Merchant receives</span>
+                <strong>{invoice.amount} {destination.symbol}</strong>
+              </div>
+              {readTimeEstimate(dryResp) !== undefined && (
+                <div className="quote-row">
+                  <span>Estimated time</span>
+                  <span>{formatEstimate(readTimeEstimate(dryResp) as number)}</span>
+                </div>
+              )}
+            </div>
           </>
         )}
-        <button type="button" onClick={requestLive} disabled={busy}>
+        <button type="button" className="btn btn--primary btn--block" onClick={requestLive} disabled={busy}>
           {busy ? "Getting your address…" : "Confirm and get payment address"}
         </button>
-        <button type="button" className="pay-secondary" onClick={() => setPhase("select")} disabled={busy}>
+        <button type="button" className="btn btn--block" onClick={() => setPhase("select")} disabled={busy}>
           Change token
         </button>
       </section>
     ) : null;
 
   return (
-    <>
-      {invoiceView}
+    <Checkout invoice={invoice} step={phase === "select" ? 1 : 2}>
       {label}
       {configFailed && (
-        <p className="pay-error" role="alert">
+        <p className="notice notice--danger" role="alert">
           Could not check the server setup. Reload the page to try again.
         </p>
       )}
       {mode && tokensError && (
-        <div className="pay-error" role="alert">
+        <div className="notice notice--danger" role="alert">
           <p>We could not load the list of tokens.</p>
-          <button type="button" onClick={retryTokens}>Try again</button>
+          <button type="button" className="btn btn--sm" onClick={retryTokens}>Try again</button>
         </div>
       )}
-      {mode && !tokens && !tokensError && <p>Loading tokens…</p>}
+      {mode && !tokens && !tokensError && (
+        <div className="card" role="status">
+          <p className="muted">Loading tokens…</p>
+          <span className="skeleton skeleton--text" />
+          <span className="skeleton skeleton--text" />
+        </div>
+      )}
       {tokens && !destination && (
-        <p className="pay-error" role="alert">Payments to this merchant are not available right now.</p>
+        <p className="notice notice--danger" role="alert">Payments to this merchant are not available right now.</p>
       )}
       {tokens && destination && phase === "select" && (
-        <section className="pay-card" aria-label="Choose how to pay">
+        <section className="card pay-card" aria-label="Choose how to pay">
           <h2>Choose how to pay</h2>
           <TokenPicker tokens={tokens} selected={origin} onSelect={setOrigin} />
-          {origin && (
-            <p>
-              Selected: <strong>{origin.symbol}</strong> on {origin.blockchain}
+          <div className="stack-sm">
+            <label className="field">
+              {origin ? `Your address on ${chainName(origin.blockchain)} for refunds` : "Your address for refunds"}
+              <input
+                value={refund}
+                onChange={(e) => setRefund(e.target.value)}
+                placeholder={origin ? `Your ${chainName(origin.blockchain)} address` : "Choose a token first"}
+                autoComplete="off"
+                aria-invalid={refundError ? true : undefined}
+                aria-describedby="refund-hint"
+              />
+            </label>
+            <p id="refund-hint" className="pay-hint">
+              {origin ? `You are paying with ${origin.symbol} on ${chainName(origin.blockchain)}. ` : ""}
+              Used only if the payment cannot go through. Your money is sent back to this address.
             </p>
-          )}
-          <label>
-            Refund address
-            <input
-              value={refund}
-              onChange={(e) => setRefund(e.target.value)}
-              placeholder={origin ? `Your ${origin.blockchain} address` : "Choose a token first"}
-              autoComplete="off"
-              aria-invalid={refundError ? true : undefined}
-            />
-          </label>
-          <p className="pay-hint">If something goes wrong, your money is returned here.</p>
-          {refundError && <p className="pay-error" role="alert">{refundError}</p>}
-          <button type="button" onClick={requestDry} disabled={!origin || busy}>
+          </div>
+          {refundError && <p className="notice notice--danger" role="alert">{refundError}</p>}
+          <button type="button" className="btn btn--primary btn--block" onClick={requestDry} disabled={!origin || busy}>
             {busy ? "Getting your quote…" : "See what I will pay"}
           </button>
         </section>
       )}
       {quoteView}
       {error && (
-        <div className="pay-error" role="alert">
+        <div className="notice notice--danger" role="alert">
           <p>{error}</p>
           {retryAction && (
-            <button type="button" onClick={retryAction === "dry" ? requestDry : requestLive} disabled={busy}>
+            <button type="button" className="btn btn--sm" onClick={retryAction === "dry" ? requestDry : requestLive} disabled={busy}>
               Try again
             </button>
           )}
         </div>
       )}
-    </>
+    </Checkout>
   );
 }
