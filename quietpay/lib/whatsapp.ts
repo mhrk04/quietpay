@@ -58,3 +58,7 @@ export function buildReceiptShareUrl(inv: WhatsappInvoice, statusUrl: string): s
   if (best < 0) return build("");
   return build(cps.slice(0, best).join("") + ELLIPSIS);
 }
+export function trackingMessage(inv: WhatsappInvoice, statusUrl: string): string {
+  const what = inv.description ? `${inv.amount} USDC for ${inv.description}` : `${inv.amount} USDC`;
+  return `I have started paying ${what}. Track it here: ${statusUrl}`;
+}

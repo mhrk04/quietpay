@@ -341,3 +341,86 @@ test("status 404 shows Payment not found", async ({ page }, info) => {
   await expect(page.getByText("Payment not found")).toBeVisible();
   await noOverflow(page);
 });
+test("deposit view: tracking opens in a new tab and merchant WhatsApp carries the status link", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await mockSetup(page, api);
+  await mockQuote(page, api, () => liveBody());
+  await toDry(page);
+  await page.getByRole("button", { name: "Confirm and get payment address" }).click();
+  const dep = page.getByRole("region", { name: "Payment instructions" });
+  const trackLink = dep.getByRole("link", { name: "Track this payment" });
+  await expect(trackLink).toHaveAttribute("target", "_blank");
+  await expect(trackLink).toHaveAttribute("rel", "noopener noreferrer");
+  const wa = dep.getByRole("link", { name: "Send tracking link to the merchant on WhatsApp" });
+  const href = (await wa.getAttribute("href"))!;
+  expect(href.startsWith("https://wa.me/")).toBe(true);
+  await expect(wa).toHaveAttribute("target", "_blank");
+  const statusHref = (await trackLink.getAttribute("href"))!;
+  expect(href).toContain(encodeURIComponent(statusHref));
+  const text = decodeURIComponent(href.split("text=")[1]);
+  expect(text).toContain("I have started paying 1 USDC for Coffee order. Track it here: ");
+});
+test("reopening the pay link resumes the same deposit without a new quote; start over clears it", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await mockSetup(page, api);
+  await mockQuote(page, api, () => liveBody());
+  await toDry(page);
+  await page.getByRole("button", { name: "Confirm and get payment address" }).click();
+  const dep = page.getByRole("region", { name: "Payment instructions" });
+  await expect(dep.getByText(DEPOSIT)).toBeVisible();
+  const quotesBefore = api.apiCalls.filter((p) => p === "/api/quote").length;
+  expect(quotesBefore).toBe(2);
+  await page.reload();
+  await expect(dep.getByText(DEPOSIT)).toBeVisible();
+  await expect(page.getByText("You already started this payment. Send to the same address below.")).toBeVisible();
+  await expect(dep.getByText("1.010224 USDC").first()).toBeVisible();
+  expect(api.apiCalls.filter((p) => p === "/api/quote").length).toBe(quotesBefore);
+  await expect(api.quotes).toHaveLength(2);
+  await page.getByRole("button", { name: "Start over with a new quote" }).click();
+  await expect(page.getByRole("region", { name: "Choose how to pay" })).toBeVisible();
+  await expect(dep).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Choose how to pay" })).toBeVisible();
+  await expect(dep).toHaveCount(0);
+});
+test("status page while pending shows the deposit address and a link back to the pay page", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await page.route("**/api/status**", (route) =>
+    json(route, 200, { status: "PENDING_DEPOSIT", swapDetails: {} }),
+  );
+  await page.goto(statusUrl({ deadline: Date.now() + 20 * 60_000 }));
+  await expect(page.getByText("Waiting for your payment").first()).toBeVisible();
+  const box = page.getByRole("region", { name: "Deposit address" });
+  await expect(box.getByText(DEPOSIT)).toBeVisible();
+  await expect(box.getByRole("button", { name: "Copy address" })).toBeVisible();
+  const back = page.getByRole("link", { name: "Back to payment instructions" });
+  expect(await back.getAttribute("href")).toBe(payUrl());
+  await back.click();
+  await expect(page).toHaveURL(/\/pay\?i=/);
+});
+test("status page hides the deposit address once a deposit is detected", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await page.route("**/api/status**", (route) => json(route, 200, { status: "PROCESSING", swapDetails: {} }));
+  await page.goto(statusUrl({ deadline: Date.now() + 20 * 60_000 }));
+  await expect(page.getByText("Converting and sending").first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Deposit address" })).toHaveCount(0);
+});
+test("Create page links to the merchant NEAR account on nearblocks", async ({ page }, info) => {
+  const api = await guard(page);
+  track(info, api);
+  await page.goto("/");
+  await page.getByLabel("Amount (USDC)").fill("1");
+  await page.getByLabel("Merchant NEAR account").fill("near");
+  await page.getByRole("button", { name: "Create payment link" }).click();
+  const result = page.getByRole("region", { name: "Your payment link" });
+  const fresh = result.getByRole("link", { name: "Check my NEAR account" });
+  await expect(fresh).toHaveAttribute("href", "https://nearblocks.io/address/near");
+  await expect(fresh).toHaveAttribute("target", "_blank");
+  await expect(fresh).toHaveAttribute("rel", /noopener/);
+  const saved = page.getByRole("region", { name: "Saved invoices" }).getByRole("link", { name: "Check my NEAR account" });
+  await expect(saved.first()).toHaveAttribute("href", "https://nearblocks.io/address/near");
+});

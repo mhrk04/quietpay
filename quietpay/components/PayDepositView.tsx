@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Countdown } from "@/components/Countdown";
 import { CopyButton } from "@/components/CopyButton";
 import { QrCode } from "@/components/QrCode";
+import { buildWhatsappUrl, trackingMessage, type WhatsappInvoice } from "@/lib/whatsapp";
 
 type Props = {
   address: string;
@@ -13,6 +14,9 @@ type Props = {
   chain: string;
   deadlineMs: number;
   statusHref: string;
+  invoice: WhatsappInvoice;
+  resumed?: boolean;
+  onStartOver?: () => void;
   onExpire: () => void;
 };
 
@@ -46,6 +50,14 @@ export function PayDepositView(p: Props) {
   return (
     <section className="pay-card" aria-label="Payment instructions">
       <h2>Send your payment</h2>
+      {p.resumed && (
+        <p role="status">
+          You already started this payment. Send to the same address below.{" "}
+          <button type="button" className="pay-secondary" onClick={p.onStartOver}>
+            Start over with a new quote
+          </button>
+        </p>
+      )}
       <p className="pay-warning" role="note">
         Send only {p.symbol} on {p.chain}. Anything else may be lost.
       </p>
@@ -74,7 +86,17 @@ export function PayDepositView(p: Props) {
           </p>
         </div>
       )}
-      <a className="button" href={p.statusHref}>Track this payment</a>
+      <a className="button" href={p.statusHref} target="_blank" rel="noopener noreferrer">
+        Track this payment
+      </a>
+      <a
+        className="button"
+        href={buildWhatsappUrl(trackingMessage(p.invoice, p.statusHref))}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Send tracking link to the merchant on WhatsApp
+      </a>
       <div className="pay-field">
         <label>
           Transaction hash (optional)

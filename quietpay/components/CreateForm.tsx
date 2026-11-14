@@ -10,6 +10,7 @@ import { QrCode } from "./QrCode";
 
 const KEY = "quietpay:invoices";
 const MAX_DESC = 140;
+const nearblocks = (account: string) => `https://nearblocks.io/address/${encodeURIComponent(account)}`;
 type Errors = { amount?: string; account?: string; description?: string };
 
 function loadInvoices(): Invoice[] {
@@ -148,6 +149,9 @@ export function CreateForm() {
           >
             Share on WhatsApp
           </a>
+          <a href={nearblocks(link.invoice.account)} target="_blank" rel="noopener noreferrer">
+            Check my NEAR account
+          </a>
           <p className="create-notice">
             The invoice is stored inside the link, so it works on any device. Anyone can edit a link, so always check that the amount you received is correct.
           </p>
@@ -166,6 +170,9 @@ export function CreateForm() {
                   {inv.description && <span className="create-break"> – {inv.description}</span>}
                   <span className="create-hint">{new Date(inv.createdAt).toLocaleString()}</span>
                   <CopyButton value={url} label="link" />
+                  <a href={nearblocks(inv.account)} target="_blank" rel="noopener noreferrer">
+                    Check my NEAR account
+                  </a>
                 </li>
               );
             })}

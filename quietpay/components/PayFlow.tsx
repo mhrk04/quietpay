@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fromBaseUnits } from "@/lib/amount";
+import {
+  clearActiveDeposit,
+  loadActiveDeposit,
+  saveActiveDeposit,
+  type ActiveDeposit,
+} from "@/lib/active-deposit";
 import { buildStatusLink, decodeInvoice } from "@/lib/link-codec";
 import {
   amountInChanged,
@@ -93,8 +99,34 @@ export function PayFlow() {
   const [liveResp, setLiveResp] = useState<PartialQuoteResponse | null>(null);
   const [liveDeadline, setLiveDeadline] = useState<string | null>(null);
 
+  const [resumed, setResumed] = useState<ActiveDeposit | null>(null);
   const destination = useMemo(() => (tokens ? findDestinationToken(tokens) : undefined), [tokens]);
 
+  // Resume an unexpired deposit for this invoice (localStorage is only readable after mount).
+  useEffect(() => {
+    if (!invoice) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
+    setResumed(loadActiveDeposit(encoded));
+  }, [invoice, encoded]);
+  // Save the active deposit once the deposit view is shown.
+  useEffect(() => {
+    if (phase !== "deposit" || !origin || !request || !liveResp) return;
+    const address = readDepositAddress(liveResp);
+    const amountIn = liveResp.quote?.amountIn;
+    if (!address || !amountIn || !invoice) return;
+    const q = readDeadline(liveResp);
+    const deadlineMs = q ? Date.parse(q) : Date.parse(liveDeadline ?? request.deadline);
+    if (!Number.isFinite(deadlineMs)) return;
+    saveActiveDeposit(encoded, {
+      address,
+      memo: readDepositMemo(liveResp),
+      amountIn,
+      origin: { symbol: origin.symbol, blockchain: origin.blockchain, decimals: origin.decimals, assetId: origin.assetId },
+      refund: request.refundTo,
+      deadlineMs,
+      statusHref: buildStatusLink(window.location.origin, address, invoice, { refund: request.refundTo, deadline: deadlineMs }),
+    });
+  }, [phase, origin, request, liveResp, liveDeadline, encoded, invoice]);
   // Config (only for valid links).
   useEffect(() => {
     if (!invoice) return;
@@ -268,7 +300,20 @@ export function PayFlow() {
     setPhase(amountInChanged(baseline, r.resp.quote) ? "reconfirm" : "deposit");
   }
 
-  const onExpire = useCallback(() => setPhase("expired"), []);
+  const onExpire = useCallback(() => {
+    clearActiveDeposit(encoded);
+    setPhase("expired");
+  }, [encoded]);
+  const onResumedExpire = useCallback(() => {
+    clearActiveDeposit(encoded);
+    setResumed(null);
+    setPhase("select");
+  }, [encoded]);
+  const startOver = useCallback(() => {
+    clearActiveDeposit(encoded);
+    setResumed(null);
+    setPhase("select");
+  }, [encoded]);
 
   function newQuote() {
     setLiveResp(null);
@@ -299,6 +344,30 @@ export function PayFlow() {
     </section>
   );
 
+  if (resumed) {
+    const amountText = fromBaseUnits(resumed.amountIn, resumed.origin.decimals);
+    return (
+      <>
+        {invoiceView}
+        <PayDepositView
+          address={resumed.address}
+          memo={resumed.memo}
+          amountText={amountText}
+          symbol={resumed.origin.symbol}
+          chain={resumed.origin.blockchain}
+          deadlineMs={resumed.deadlineMs}
+          statusHref={buildStatusLink(window.location.origin, resumed.address, invoice, {
+            refund: resumed.refund,
+            deadline: resumed.deadlineMs,
+          })}
+          invoice={invoice}
+          resumed
+          onStartOver={startOver}
+          onExpire={onResumedExpire}
+        />
+      </>
+    );
+  }
   if (mode === "unconfigured") {
     return (
       <>
@@ -345,6 +414,7 @@ export function PayFlow() {
           chain={origin.blockchain}
           deadlineMs={deadlineMs}
           statusHref={statusHref}
+          invoice={invoice}
           onExpire={onExpire}
         />
       </>

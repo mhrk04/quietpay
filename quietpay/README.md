@@ -34,7 +34,8 @@ Each step is one action with one expected result. Run the app first (see Setup).
 4. Choose a token and chain, enter a refund address on that chain (a real address of yours), and request the quote. Expected: a dry quote shows what you send (`amountIn`), the minimum accepted (`minAmountIn`), the exact USDC the merchant receives, and the time estimate. No deposit address is shown yet.
 5. Press "Confirm and get payment address". Expected: one live quote is requested, then the deposit address, QR code, exact amount, copy buttons, a countdown and a link to the status page appear. If the live amount differs from the dry quote, the new amount is shown and you must confirm again. **Sending tokens to this address moves real funds.**
 6. (Optional, real money) Send the shown amount of the selected token on the selected chain to the deposit address from your own wallet. Expected: your wallet shows the transfer. You may paste the transaction hash and press "Send hash to speed things up".
-7. Open the status page link. Expected: the page checks status immediately, then every 3 seconds, and shows "Waiting for your payment", then "Payment seen, confirming", then "Converting and sending".
+   Expected after step 5: the deposit view is saved in this browser. Reopen the same pay link before the countdown ends and you see the same address and amount with the note "You already started this payment", and no new quote is requested. "Start over with a new quote" clears it.
+7. Press "Track this payment". Expected: the status page opens in a new tab, so the payment instructions stay open. While it waits for a deposit, the status page also shows the deposit address with a copy button and a "Back to payment instructions" link. To tell the merchant, press "Send tracking link to the merchant on WhatsApp". The merchant can also press "Check my NEAR account" on the Create page. It opens nearblocks.io and shows incoming USDC even when the payer does not share the tracking link. On the status page, expected: the page checks status immediately, then every 3 seconds, and shows "Waiting for your payment", then "Payment seen, confirming", then "Converting and sending".
 8. Wait for the final status. Expected: "Payment complete" with the delivered amount, the merchant account and explorer links where the API returns them. Other final results are "Payment returned to you", "Payment failed" and "Not enough was sent". Polling stops.
 9. Press "Share receipt on WhatsApp". Expected: WhatsApp opens (`wa.me`) with a prefilled message holding the description, amount, merchant account and status page URL. Before success the button reads "Share status on WhatsApp" and the message holds only the status URL and the status.
 
@@ -47,8 +48,8 @@ Steps 1 to 5 do not require sending money. Without sending funds, the status pag
 | 0:00 to 0:10 | Step 1 | "QuietPay lets a merchant ask for an exact USDC amount and be paid from any chain. Mainnet only, so I use 1 USDC." |
 | 0:10 to 0:25 | Step 2 | "I enter the amount and my NEAR account and get a link, a QR code and a WhatsApp share." |
 | 0:25 to 0:45 | Steps 3 and 4 | "The payer opens the link, picks a token and chain, and sees a dry quote: what they send, the minimum, and the exact USDC the merchant gets. No address yet." |
-| 0:45 to 0:55 | Step 5 | "After confirming, they get one deposit address with a countdown. The 1Click API does the swap." |
-| 0:55 to 1:10 | Steps 6 to 8 | "I send from my wallet. The status page checks every 3 seconds until the payment is complete." |
+| 0:45 to 0:55 | Step 5 | "After confirming, they get one deposit address with a countdown. Reopening the link brings back the same address. The 1Click API does the swap." |
+| 0:55 to 1:10 | Steps 6 to 8 | "I send from my wallet. Tracking opens in a new tab and checks every 3 seconds. The payer can send that link to the merchant, and the merchant can also check their NEAR account." |
 | 1:10 to 1:25 | Step 9 | "Either side shares a receipt on WhatsApp. No smart contract, no database, no keys. Confidential mode needs a partner JWT, and it does not hide the merchant account or amount on NEAR." |
 
 ## Setup

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import { parseStatusLink } from "@/lib/link-codec";
+import { buildPayLink, parseStatusLink } from "@/lib/link-codec";
 import { createPoller, type PollerDeps, type PollerView, type StatusBody } from "@/lib/poller";
 import { refundReasonText, statusMessage } from "@/lib/status";
 import { buildReceiptShareUrl, buildWhatsappUrl, statusOnlyMessage } from "@/lib/whatsapp";
+import { CopyButton } from "@/components/CopyButton";
 import { Receipt, TxLinks, safeTxLinks } from "@/components/Receipt";
 
 const EXPLORER_URL = "https://explorer.near-intents.org";
@@ -112,6 +113,12 @@ export default function StatusView() {
     else completedAt = seenCompleteAt ?? new Date(nowMs);
   }
 
+  const showDeposit =
+    !windowClosed &&
+    deadline !== undefined &&
+    nowMs < deadline &&
+    (status === undefined || status === "PENDING_DEPOSIT");
+  const payHref = buildPayLink(statusUrl ? new URL(statusUrl).origin : "", invoice);
   const destLinks = safeTxLinks(details.destinationChainTxHashes);
   const originLinks = safeTxLinks(details.originChainTxHashes);
 
@@ -130,6 +137,14 @@ export default function StatusView() {
         </p>
       </section>
 
+      {showDeposit && (
+        <section className="status-card" aria-label="Deposit address">
+          <p>Deposit address</p>
+          <code className="status-break">{address}</code>
+          <CopyButton value={address as string} label="address" />
+          <a href={payHref}>Back to payment instructions</a>
+        </section>
+      )}
       {view.notice === "connection-problem" && (
         <p role="status" className="status-notice">
           Connection problem, retrying
