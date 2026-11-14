@@ -68,7 +68,7 @@ Other commands:
 
 ```bash
 npm test                                   # unit tests (vitest)
-npx tsc --noEmit                           # type check
+npm run typecheck                          # generate Next route types, then tsc
 npx eslint .                               # lint
 npm run build && npm start                 # production build
 npm run check:1click -- <depositAddress>   # real-API read-only check (needs network)
@@ -136,7 +136,7 @@ Run on the current tree:
 
 - `npm test`: **11 test files passed, 43 tests passed**, 0 failed.
 - `npx playwright test`: **10 tests passed** (`tests/e2e/flow.spec.ts`, 360 px viewport, mocked API routes).
-- `npx tsc --noEmit`: no errors.
+- `npm run typecheck` (`next typegen && tsc --noEmit`): no errors. Plain `tsc` on a fresh clone needs the generated route types first.
 - `npx eslint .`: no errors.
 
 Partly covered (the spec asks for more than the tests do):
@@ -154,13 +154,13 @@ Not written: the optional property-based tests (`tests/property/` is empty) and 
 
 ## Validation
 
-A specship validation run was done on 2026-11-14. Full reports are in `.specship/artifacts/verdicts/` at the repository root (outside `quietpay/`; for example `AGGREGATE.md`, `alignment.md`, `code.md`).
+A specship validation run was done on 2026-11-14. A short summary is in [`VALIDATION.md`](../VALIDATION.md) at the repository root. The full working reports were kept out of the repository.
 
 | Validator | Result |
 |---|---|
 | Integration | PASS |
 | Security | PASS, 0 findings rated 7/10 or higher |
-| Code | FAIL at the time of the run. Findings: a confirm loop after a price change, unguarded proxy routes when the server is unconfigured, a 401 on a private quote that blocked retry, and an unused `swapType` guard. All four are fixed (task 13.1) and have regression tests. |
+| Code | FAIL at the time of the run. Findings: a confirm loop after a price change, unguarded proxy routes when the server is unconfigured, a 401 on a private quote that blocked retry, and an unused `swapType` guard. All four are fixed and have regression tests. |
 | Browser | FAIL at the time of the run (the same confirm loop). Fixed. |
 | Design | FAIL: anti-slop score 8/15 and accessibility score 89 on `/pay`. Accepted as a known limitation. |
 | Alignment | PARTIAL. The README and tagline items are fixed in this change: stale "e2e not written" text, the missing fallback-flag setup step, and the "private" tagline. |
